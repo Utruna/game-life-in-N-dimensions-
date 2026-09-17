@@ -22,7 +22,11 @@ class RuleSet:
 
         birth = _parse_numbers(birth_part[1:])
         survive = _parse_numbers(survive_part[1:])
-        return cls(birth=frozenset(birth), survive=frozenset(survive), spec=f"B{','.join(map(str, sorted(birth)))}/S{','.join(map(str, sorted(survive)))}")
+        birth_str = ",".join(map(str, sorted(birth)))
+        survive_str = ",".join(map(str, sorted(survive)))
+        normalized_spec = f"B{birth_str}/S{survive_str}"
+
+        return cls(birth=frozenset(birth), survive=frozenset(survive), spec=normalized_spec)
 
 
 def _parse_numbers(raw: str) -> set[int]:

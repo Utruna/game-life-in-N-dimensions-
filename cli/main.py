@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import h5py
 import numpy as np
@@ -48,7 +48,7 @@ def run_simulation(engine: NDimLifeEngine, initial_dense: np.ndarray, generation
     return dense_states
 
 
-def states_to_json_serializable(states: Iterable[np.ndarray]) -> list[list[list[int]]]:
+def states_to_json_serializable(states: Iterable[np.ndarray]) -> list[Any]:
     return [state.tolist() for state in states]
 
 
