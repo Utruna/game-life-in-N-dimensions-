@@ -655,10 +655,10 @@
               </div>
               <div class="field" id="volumeDensityField" hidden>
                 <div class="field-label">
-                  <label for="volumeDensity">Opacité du volume</label>
-                  <span class="field-value" id="volumeDensityValue">3.5 %</span>
+                  <label for="volumeDensity">Opacité (auto ×)</label>
+                  <span class="field-value" id="volumeDensityValue">×1.00</span>
                 </div>
-                <input type="range" id="volumeDensity" min="0.005" max="0.2" step="0.005" value="0.035" />
+                <input type="range" id="volumeDensity" min="0.25" max="4" step="0.05" value="1" />
               </div>
               <label class="switch">
                 <input type="checkbox" id="optRotate" />
@@ -822,7 +822,7 @@
         uniform sampler3D uVolume;
         uniform sampler2D uRamp;
         uniform float uSteps;
-        uniform float uDensity;
+        uniform float uAlpha;
         uniform float uExposure;
 
         in vec3 vOrigin;
@@ -860,7 +860,7 @@
               // La rampe est calibrée en HDR pour des cubes éclairés un par un ;
               // accumulée le long d'un rayon elle sature en blanc, d'où l'exposition.
               vec3 rgb = texture(uRamp, vec2((value * 255.0 + 0.5) / 256.0, 0.5)).rgb * uExposure;
-              float a = clamp(uDensity * delta * 64.0, 0.0, 1.0);
+              float a = uAlpha;
               accum += (1.0 - alpha) * rgb * a;
               alpha += (1.0 - alpha) * a;
             }
@@ -927,16 +927,33 @@
       let volumeTexture = null;
       let rampTexture = null;
 
-      // 'auto' bascule sur le volumétrique quand le cube devient trop gros pour
-      // qu'on distingue encore une cellule (et trop lourd en instances).
-      const AUTO_VOLUME_FROM = 64 ** 3;
+      // Basculer sur la taille de grille était une erreur : une grille 160³ avec
+      // un tore creux n'a que quelques milliers de cellules, que les cubes
+      // rendent bien plus nettement. Le seul cas où le volumétrique s'impose est
+      // quand il y a plus de cellules que le rendu instancié n'en encaisse.
+      const AUTO_VOLUME_FROM_CELLS = 1200000;
       let renderMode = 'auto';
-      let volumeDensity = 0.035;
+      // Multiplicateur manuel appliqué à l'opacité calculée automatiquement.
+      let volumeGain = 1;
+
+      // Opacité visée pour un rayon qui traverse tout le volume. Un rayon
+      // rencontre ~N×remplissage cellules ; pour que le total reste constant,
+      // l'opacité par échantillon doit varier à l'inverse du remplissage —
+      // sinon une grille creuse s'efface et une grille pleine devient un mur.
+      const VOLUME_TARGET_ALPHA = 0.85;
+
+      function autoSampleAlpha() {
+        if (!volumeMesh || !gridShape) return 0.1;
+        const volume = gridShape[0] * gridShape[1] * gridShape[2];
+        const steps = volumeMesh.material.uniforms.uSteps.value;
+        const occupied = Math.max(1e-4, steps * (population / volume));
+        const alpha = 1 - Math.pow(1 - VOLUME_TARGET_ALPHA, 1 / occupied);
+        return Math.min(1, alpha * volumeGain);
+      }
 
       function effectiveMode() {
         if (renderMode !== 'auto') return renderMode;
-        if (!gridShape) return 'cubes';
-        return gridShape[0] * gridShape[1] * gridShape[2] >= AUTO_VOLUME_FROM ? 'volume' : 'cubes';
+        return population > AUTO_VOLUME_FROM_CELLS ? 'volume' : 'cubes';
       }
 
       const dummy = new THREE.Object3D();
@@ -1036,11 +1053,12 @@
             uniforms: {
               uVolume: { value: volumeTexture },
               uRamp: { value: rampTexture },
-              // Un pas par voxel de diagonale ferait ~280 échantillons par pixel
-              // à 160³, soit 170 M de lectures de texture par image : on plafonne.
-              uSteps: { value: Math.min(144, Math.max(64, Math.round(maxSide * 0.9))) },
-              uDensity: { value: volumeDensity },
-              uExposure: { value: 0.42 },
+              // Il faut au moins un pas par voxel le long de la diagonale
+              // (maxSide × √3), sinon les structures fines d'une épaisseur d'une
+              // cellule sont ratées une fois sur deux et le rendu part en flou.
+              uSteps: { value: Math.min(420, Math.max(64, Math.round(maxSide * 1.8))) },
+              uAlpha: { value: 0.1 },
+              uExposure: { value: 0.55 },
               uCameraLocal: { value: new THREE.Vector3() },
             },
             side: THREE.BackSide, // on marche depuis les faces arrière : marche aussi de l'intérieur
@@ -1623,9 +1641,9 @@
       });
 
       bindRange($('#volumeDensity'), (value) => {
-        $('#volumeDensityValue').textContent = `${(value * 100).toFixed(1)} %`;
-        volumeDensity = value;
-        if (volumeMesh) volumeMesh.material.uniforms.uDensity.value = value;
+        $('#volumeDensityValue').textContent = `×${value.toFixed(2)}`;
+        volumeGain = value;
+        if (volumeMesh) volumeMesh.material.uniforms.uAlpha.value = autoSampleAlpha();
       });
 
       $('#optRotate').addEventListener('change', (event) => {
@@ -1739,6 +1757,7 @@
           population = decoded.liveCount;
           lastChurn = decoded.churn;
           clipped = false;
+          volumeMesh.material.uniforms.uAlpha.value = autoSampleAlpha();
         } else {
           ingest(attachBinViews(decoded));
         }
