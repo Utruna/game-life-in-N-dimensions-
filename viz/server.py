@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from threading import Lock
 
@@ -12,10 +13,24 @@ from rules import get_rule
 
 app = FastAPI(title="N-Dimensional Game of Life")
 
-SHAPE = (20, 20, 20)
-CONFIG = SimulationConfig(shape=SHAPE, rules=get_rule("life_3d_bays"), backend="dense")
+
+def _parse_shape(raw: str) -> tuple[int, ...]:
+    values = tuple(int(part.strip()) for part in raw.split(",") if part.strip())
+    if len(values) < 2:
+        raise ValueError("VIZ_SHAPE doit contenir au moins 2 dimensions")
+    if any(value <= 0 for value in values):
+        raise ValueError("VIZ_SHAPE doit contenir des dimensions > 0")
+    return values
+
+
+SHAPE = _parse_shape(os.getenv("VIZ_SHAPE", "20,20,20"))
+RULE_SPEC = os.getenv("VIZ_RULE", "life_3d_bays")
+DENSITY = float(os.getenv("VIZ_DENSITY", "0.1"))
+SEED = int(os.getenv("VIZ_SEED", "0"))
+
+CONFIG = SimulationConfig(shape=SHAPE, rules=get_rule(RULE_SPEC), backend="dense")
 ENGINE = NDimLifeEngine(CONFIG)
-STATE = (np.random.default_rng(0).random(SHAPE) < 0.1).astype(np.uint8)
+STATE = (np.random.default_rng(SEED).random(SHAPE) < DENSITY).astype(np.uint8)
 STATE_LOCK = Lock()
 
 

@@ -28,6 +28,13 @@ def init_random_dense(shape: tuple[int, ...], density: float, seed: int | None) 
     return (rng.random(shape) < density).astype(np.uint8)
 
 
+def resolve_run_backend(engine: NDimLifeEngine, initial_dense: np.ndarray) -> str:
+    if engine.config.backend in {"dense", "sparse"}:
+        return engine.config.backend
+    live_ratio = float(np.count_nonzero(initial_dense)) / float(initial_dense.size if initial_dense.size else 1)
+    return "sparse" if live_ratio < 0.10 else "dense"
+
+
 def to_dense_state(engine: NDimLifeEngine, state: State) -> np.ndarray:
     if isinstance(state, np.ndarray):
         return state.astype(np.uint8)
@@ -35,16 +42,20 @@ def to_dense_state(engine: NDimLifeEngine, state: State) -> np.ndarray:
 
 
 def run_simulation(engine: NDimLifeEngine, initial_dense: np.ndarray, generations: int) -> list[np.ndarray]:
-    state: State
-    if engine.config.backend == "sparse":
-        state = engine.sparse_from_dense(initial_dense)
-    else:
-        state = initial_dense
-
+    runtime_backend = resolve_run_backend(engine, initial_dense)
     dense_states: list[np.ndarray] = [initial_dense.astype(np.uint8)]
+
+    if runtime_backend == "dense":
+        dense_state = initial_dense
+        for _ in range(generations):
+            dense_state = engine.step_dense(dense_state)
+            dense_states.append(dense_state)
+        return dense_states
+
+    sparse_state = engine.sparse_from_dense(initial_dense)
     for _ in range(generations):
-        state = engine.step(state)
-        dense_states.append(to_dense_state(engine, state))
+        sparse_state = engine.step_sparse(sparse_state)
+        dense_states.append(to_dense_state(engine, sparse_state))
     return dense_states
 
 

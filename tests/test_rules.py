@@ -26,6 +26,7 @@ def test_compact_digits_are_parsed_digit_by_digit() -> None:
     rule = RuleSet.from_spec("B12/S34")
     assert rule.birth == {1, 2}
     assert rule.survive == {3, 4}
+    assert rule.spec == "B1,2/S3,4"
 
 
 def test_invalid_rule_raises() -> None:
