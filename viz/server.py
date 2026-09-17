@@ -59,7 +59,8 @@ def get_state(w: int = Query(default=0, ge=0)) -> dict[str, object]:
             "shape": list(snapshot.shape),
             "slice_axis": 3,
             "slice_index": slice_index,
-            "live_cells": np.argwhere(sliced > 0).tolist(),
+            "slice_live_cells": np.argwhere(sliced > 0).tolist(),
+            "live_cells_4d": np.argwhere(snapshot > 0).tolist(),
         }
 
     return {"ndim": int(snapshot.ndim), "shape": list(snapshot.shape), "live_cells": []}

@@ -101,5 +101,6 @@ def test_cli_hdf5_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert run() == 0
     with h5py.File(output, "r") as h5:
         assert tuple(h5.attrs["shape"]) == (5, 5, 5, 5)
+        assert h5.attrs["rules"] == "B18,19,20/S18,19,20,21"
         assert int(h5.attrs["generations"]) == 1
         assert h5["states"].shape[0] == 2
