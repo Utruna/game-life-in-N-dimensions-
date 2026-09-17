@@ -7,197 +7,1835 @@
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0d1117;
-        --panel: #151c25;
-        --line: #2d3a48;
-        --text: #e6edf3;
-        --muted: #8b9aaa;
-        --accent: #62d6c4;
-        --alive: #ffcc66;
+
+        --plane: #070a0e;
+        --surface: #0e141b;
+        --surface-2: #131c25;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-strong: rgba(255, 255, 255, 0.16);
+
+        --ink: #e9eff5;
+        --ink-2: #a3b4c4;
+        --muted: #6d7f8f;
+
+        --accent: #5fd4c4;
+        --accent-deep: #0ea592;
+        --accent-wash: rgba(95, 212, 196, 0.12);
+        --warn: #fab219;
+
+        --life-young: #ffe1a0;
+        --life-mid: #f7973f;
+        --life-old: #b8442a;
+
+        --r: 10px;
+        --r-sm: 7px;
+        --font: system-ui, -apple-system, "Segoe UI", sans-serif;
       }
 
       * { box-sizing: border-box; }
+
+      html, body { height: 100%; }
+
       body {
         margin: 0;
-        min-height: 100vh;
-        background: radial-gradient(circle at 20% 0%, #1b2935 0, var(--bg) 45%);
-        color: var(--text);
-        font: 15px/1.45 ui-sans-serif, system-ui, sans-serif;
+        background: var(--plane);
+        color: var(--ink);
+        font: 400 14px/1.5 var(--font);
+        -webkit-font-smoothing: antialiased;
       }
-      main { width: min(1180px, 100%); margin: auto; padding: 28px; }
-      header { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 20px; }
-      h1 { margin: 0; font: 700 clamp(28px, 5vw, 54px)/1.05 Georgia, serif; letter-spacing: .01em; }
-      .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
-      .status { color: var(--muted); text-align: right; }
-      .layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 18px; }
-      .stage, .controls { border: 1px solid var(--line); background: rgba(21, 28, 37, .86); }
-      .stage { min-height: 600px; position: relative; overflow: hidden; }
-      canvas { display: block; width: 100%; height: 600px; }
-      .legend { position: absolute; left: 18px; bottom: 16px; color: var(--muted); }
-      .dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; background: var(--alive); border-radius: 50%; }
-      .controls { padding: 20px; }
-      label { display: block; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-      input[type="range"] { width: 100%; accent-color: var(--accent); }
-      .value { color: var(--text); font-weight: 700; }
-      button { width: 100%; padding: 11px 14px; margin-top: 12px; border: 1px solid var(--accent); background: transparent; color: var(--text); cursor: pointer; font: inherit; }
-      button:hover, button.active { background: var(--accent); color: #0d1117; }
-      .noise { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
-      .noise label { display: flex; align-items: center; gap: 8px; }
-      .noise label[for="noiseToggle"] { color: var(--text); font-size: 14px; margin-bottom: 14px; cursor: pointer; }
-      .noise label[for="noiseRate"] { display: block; }
-      .noise input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); }
-      .stats { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; color: var(--muted); }
-      .stats strong { color: var(--text); }
-      @media (max-width: 760px) {
-        main { padding: 18px; }
-        header { display: block; }
-        .status { margin-top: 10px; text-align: left; }
+
+      .app {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 18px clamp(14px, 2.4vw, 28px) 22px;
+        max-width: 1560px;
+        margin: 0 auto;
+      }
+
+      /* ---------- topbar ---------- */
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      .brand { display: flex; align-items: center; gap: 13px; }
+
+      .brand-mark {
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        background:
+          radial-gradient(circle at 32% 28%, var(--life-young) 0 18%, transparent 19%),
+          radial-gradient(circle at 68% 62%, var(--accent) 0 15%, transparent 16%),
+          linear-gradient(145deg, #1b2a36, #0d151d);
+        border: 1px solid var(--line-strong);
+        flex: none;
+      }
+
+      .eyebrow {
+        font-size: 10.5px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+
+      .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+      .chip {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 5px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-2);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .chip b { color: var(--ink); font-weight: 600; }
+
+      .chip .led {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--muted);
+        flex: none;
+      }
+
+      .chip[data-state="live"] .led { background: var(--accent); box-shadow: 0 0 9px var(--accent); }
+      .chip[data-state="idle"] .led { background: var(--warn); }
+      .chip[data-state="error"] .led { background: #e05a4f; }
+
+      /* ---------- layout ---------- */
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 306px;
+        gap: 14px;
+        align-items: start;
+      }
+
+      /* ---------- stage ---------- */
+
+      .stage {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        overflow: hidden;
+        background: #070a0e;
+        min-height: 300px;
+        height: clamp(460px, calc(100vh - 168px), 860px);
+      }
+
+      #scene { display: block; width: 100%; height: 100%; }
+
+      .vignette {
+        position: absolute; inset: 0;
+        pointer-events: none;
+        background: radial-gradient(ellipse at 50% 46%, transparent 42%, rgba(0, 0, 0, 0.55) 100%);
+      }
+
+      .hud {
+        position: absolute;
+        pointer-events: none;
+        display: flex;
+        gap: 10px;
+      }
+
+      .hud-top { top: 14px; left: 15px; }
+
+      .hud-bottom {
+        left: 15px; right: 15px; bottom: 13px;
+        align-items: flex-end;
+        justify-content: space-between;
+      }
+
+      .readout {
+        background: rgba(8, 12, 17, 0.72);
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        padding: 7px 12px;
+        backdrop-filter: blur(9px);
+      }
+
+      .readout-label {
+        display: block;
+        font-size: 10px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .readout-value {
+        display: block;
+        font-size: 21px;
+        font-weight: 600;
+        line-height: 1.15;
+        margin-top: 1px;
+      }
+
+      .ramp {
+        display: flex; align-items: center; gap: 9px;
+        background: rgba(8, 12, 17, 0.72);
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        padding: 6px 11px;
+        backdrop-filter: blur(9px);
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .ramp-bar {
+        width: 88px; height: 7px; border-radius: 4px;
+        background: linear-gradient(90deg, #fff6dd, var(--life-young), var(--life-mid), var(--life-old));
+      }
+
+      .hint { font-size: 11px; color: var(--muted); text-align: right; }
+
+      .boot {
+        position: absolute; inset: 0;
+        display: grid; place-content: center; gap: 12px;
+        justify-items: center;
+        background: var(--plane);
+        text-align: center;
+        padding: 26px;
+        transition: opacity 0.4s ease;
+      }
+
+      .boot[hidden] { display: none; }
+      .boot.fade { opacity: 0; pointer-events: none; }
+      .boot p { margin: 0; color: var(--ink-2); max-width: 40ch; font-size: 13px; }
+      .boot code {
+        font-size: 12px; color: var(--ink);
+        background: var(--surface-2); padding: 2px 6px; border-radius: 4px;
+      }
+
+      .spinner {
+        width: 26px; height: 26px; border-radius: 50%;
+        border: 2px solid var(--line-strong);
+        border-top-color: var(--accent);
+        animation: spin 0.85s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ---------- panel ---------- */
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--surface);
+        max-height: clamp(460px, calc(100vh - 168px), 860px);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-strong) transparent;
+      }
+
+      .panel::-webkit-scrollbar { width: 9px; }
+      .panel::-webkit-scrollbar-thumb {
+        background: var(--line-strong); border-radius: 9px;
+        border: 3px solid var(--surface);
+      }
+
+      .section { border-bottom: 1px solid var(--line); }
+      .section:last-child { border-bottom: 0; }
+
+      .section > summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 12px 15px;
+        display: flex; align-items: center; gap: 9px;
+        font-size: 11px; font-weight: 600;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        color: var(--ink-2);
+        user-select: none;
+      }
+
+      .section > summary::-webkit-details-marker { display: none; }
+
+      .section > summary::after {
+        content: "";
+        margin-left: auto;
+        width: 6px; height: 6px;
+        border-right: 1.5px solid var(--muted);
+        border-bottom: 1.5px solid var(--muted);
+        transform: rotate(45deg) translateY(-2px);
+        transition: transform 0.18s ease;
+      }
+
+      .section[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+      .section > summary:hover { color: var(--ink); }
+
+      .section-body { padding: 2px 15px 16px; display: grid; gap: 13px; }
+
+      .field { display: grid; gap: 7px; }
+
+      .field-label {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+        font-size: 12px; color: var(--ink-2);
+      }
+
+      .field-value { color: var(--ink); font-weight: 600; font-size: 12px; }
+
+      /* ---------- controls ---------- */
+
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        padding: 9px 12px;
+        cursor: pointer;
+        transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+      }
+
+      button:hover { background: #18232e; border-color: var(--line-strong); }
+      button:active { transform: translateY(0.5px); }
+
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      .btn-primary {
+        background: var(--accent-wash);
+        border-color: rgba(95, 212, 196, 0.4);
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .btn-primary:hover { background: rgba(95, 212, 196, 0.2); border-color: var(--accent); }
+
+      .btn-row { display: flex; gap: 7px; }
+      .btn-row > * { flex: 1; min-width: 0; }
+
+      .transport { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 7px; }
+
+      .segmented {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 3px;
+        padding: 3px;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+      }
+
+      .segmented button {
+        background: transparent;
+        border: 0;
+        padding: 7px 4px;
+        font-size: 12.5px;
+        color: var(--ink-2);
+        border-radius: 5px;
+      }
+
+      .segmented button:hover { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+
+      .segmented button[aria-checked="true"] {
+        background: var(--accent-wash);
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        font: inherit;
+        width: 100%;
+        min-width: 0;
+        color: var(--ink);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        padding: 8px 10px;
+      }
+
+      input[type="number"] { font-variant-numeric: tabular-nums; }
+
+      select {
+        appearance: none;
+        background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                          linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+        background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+        padding-right: 28px;
+      }
+
+      input[type="range"] {
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border-radius: 3px;
+        background: linear-gradient(90deg, var(--accent-deep) var(--fill, 50%), var(--surface-2) var(--fill, 50%));
+        cursor: pointer;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--surface);
+        cursor: grab;
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--surface);
+        cursor: grab;
+      }
+
+      .switch {
+        display: flex; align-items: center; gap: 10px;
+        cursor: pointer;
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+
+      .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+      .switch .track {
+        width: 34px; height: 19px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        position: relative;
+        transition: background 0.16s ease, border-color 0.16s ease;
+        flex: none;
+      }
+
+      .switch .thumb {
+        position: absolute; top: 2px; left: 2px;
+        width: 13px; height: 13px; border-radius: 50%;
+        background: var(--muted);
+        transition: transform 0.16s ease, background 0.16s ease;
+      }
+
+      .switch input:checked + .track { background: var(--accent-wash); border-color: rgba(95, 212, 196, 0.45); }
+      .switch input:checked + .track .thumb { transform: translateX(15px); background: var(--accent); }
+      .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .switch:hover { color: var(--ink); }
+
+      .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+      .row-grow { display: flex; gap: 7px; }
+      .row-grow input { flex: 1; }
+      .row-grow button { flex: none; }
+
+      [hidden] { display: none !important; }
+
+      .note { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+      .note-warn {
+        color: var(--warn);
+        border-left: 2px solid var(--warn);
+        padding-left: 9px;
+      }
+
+      /* ---------- stats ---------- */
+
+      .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+      .tile {
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        background: var(--surface-2);
+        padding: 9px 11px;
+      }
+
+      .tile-label {
+        font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .tile-value { font-size: 17px; font-weight: 600; margin-top: 2px; }
+
+      .spark-wrap { display: grid; gap: 6px; }
+      .spark-head { display: flex; justify-content: space-between; align-items: baseline; }
+      .spark-title { font-size: 12px; color: var(--ink-2); }
+      .spark-current { font-size: 12px; font-weight: 600; }
+      #spark { display: block; width: 100%; height: 56px; }
+
+      @media (max-width: 900px) {
         .layout { grid-template-columns: 1fr; }
-        .stage, canvas { min-height: 430px; height: 430px; }
+        .stage { height: 60vh; }
+        .panel { max-height: none; }
       }
     </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <div><div class="eyebrow">Simulation en temps réel</div><h1>Jeu de la Vie 3D</h1></div>
-        <div id="status" class="status">Connexion au moteur...</div>
-      </header>
-      <section class="layout">
-        <div class="stage">
-          <canvas id="scene" aria-label="Rendu 3D de la simulation"></canvas>
-          <div class="legend"><span class="dot"></span>cellules vivantes</div>
-        </div>
-        <aside class="controls">
-          <button id="step">Avancer d’une génération</button>
-          <button id="play">Lancer la simulation</button>
-          <button id="reset">Réinitialiser la grille</button>
-          <div class="noise">
-            <label for="noiseToggle">
-              <input type="checkbox" id="noiseToggle" checked />
-              Impacts météores aléatoires
-            </label>
-            <label for="noiseRate">Fréquence des impacts : <span class="value" id="noiseRateValue">12 %</span> par étape</label>
-            <input type="range" id="noiseRate" min="0" max="0.6" step="0.01" value="0.12" />
-          </div>
-          <div class="stats">
-            <div>Dimension : <strong id="ndim">-</strong></div>
-            <div>Grille : <strong id="shape">-</strong></div>
-            <div>Cellules vivantes : <strong id="count">-</strong></div>
-            <div>Génération : <strong id="generation">0</strong></div>
-          </div>
-        </aside>
-      </section>
-    </main>
-    <script>
-      const canvas = document.querySelector('#scene');
-      const context = canvas.getContext('2d');
-      const sliceInput = document.querySelector('#slice');
-      const sliceValue = document.querySelector('#sliceValue');
-      const status = document.querySelector('#status');
-      const generation = document.querySelector('#generation');
-      const noiseToggle = document.querySelector('#noiseToggle');
-      const noiseRate = document.querySelector('#noiseRate');
-      const noiseRateValue = document.querySelector('#noiseRateValue');
-      let state = null;
-      let timer = null;
 
-      function resizeCanvas() {
-        const scale = window.devicePixelRatio || 1;
-        const bounds = canvas.getBoundingClientRect();
-        canvas.width = Math.max(1, Math.floor(bounds.width * scale));
-        canvas.height = Math.max(1, Math.floor(bounds.height * scale));
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        draw();
-      }
-
-      function project(x, y, z, size, width, height) {
-        const gap = size * 0.72;
-        return { x: width / 2 + (x - y) * gap, y: height / 2 + (x + y) * gap * 0.5 - z * gap * 0.8 };
-      }
-
-      function draw() {
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
-        context.clearRect(0, 0, width, height);
-        if (!state) return;
-        const shape = state.shape;
-        const cells = state.live_cells;
-        const maxSide = Math.max(...shape.slice(0, 3));
-        const size = Math.max(4, Math.min(width, height) / (maxSide * 1.7));
-        context.fillStyle = 'rgba(98, 214, 196, .08)';
-        for (let x = 0; x < shape[0]; x++) for (let y = 0; y < shape[1]; y++) for (let z = 0; z < shape[2]; z++) {
-          const point = project(x, y, z, size, width, height);
-          context.fillRect(point.x - 1, point.y - 1, 2, 2);
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
         }
-        context.fillStyle = '#ffcc66';
-        cells.forEach(([x, y, z]) => {
-          const point = project(x, y, z, size, width, height);
-          context.beginPath();
-          context.arc(point.x, point.y, Math.max(2.5, size * .34), 0, Math.PI * 2);
-          context.fill();
-        });
+      }
+    </script>
+  </head>
+
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <div class="eyebrow">Automate cellulaire</div>
+            <h1>Jeu de la Vie 3D</h1>
+          </div>
+        </div>
+        <div class="meta">
+          <span class="chip">Règle <b id="chipRule">—</b></span>
+          <span class="chip">Grille <b id="chipGrid">—</b></span>
+          <span class="chip" id="chipStatus" data-state="idle"><span class="led"></span><span id="chipStatusText">Connexion…</span></span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="stage">
+          <canvas id="scene" aria-label="Rendu 3D de la simulation"></canvas>
+          <div class="vignette"></div>
+
+          <div class="hud hud-top">
+            <div class="readout">
+              <span class="readout-label">Génération</span>
+              <span class="readout-value" id="hudGen">0</span>
+            </div>
+            <div class="readout">
+              <span class="readout-label">Cellules vivantes</span>
+              <span class="readout-value" id="hudPop">0</span>
+            </div>
+          </div>
+
+          <div class="hud hud-bottom">
+            <div class="ramp">
+              <span>naissance</span>
+              <span class="ramp-bar" aria-hidden="true"></span>
+              <span>installée</span>
+            </div>
+            <div class="hint">glisser : pivoter · molette : zoom</div>
+          </div>
+
+          <div class="boot" id="boot">
+            <div class="spinner" id="bootSpinner"></div>
+            <p id="bootText">Chargement du moteur de rendu…</p>
+          </div>
+        </section>
+
+        <aside class="panel">
+          <details class="section" open>
+            <summary>Lecture</summary>
+            <div class="section-body">
+              <div class="transport">
+                <button id="btnPlay" class="btn-primary">Lancer</button>
+                <button id="btnStep" title="Avancer d'une génération (S)">Pas</button>
+                <button id="btnReset" title="Revenir à la génération 0 (R)">Reset</button>
+              </div>
+              <div class="field">
+                <div class="field-label">
+                  <label for="speed">Vitesse</label>
+                  <span class="field-value" id="speedValue">6 gén/s</span>
+                </div>
+                <input type="range" id="speed" min="1" max="20" step="1" value="6" />
+              </div>
+              <p class="note">Espace : lancer/pause · S : un pas · R : reset · N : nouvelle seed</p>
+            </div>
+          </details>
+
+          <details class="section" open>
+            <summary>Plateau</summary>
+            <div class="section-body">
+              <div class="field">
+                <div class="field-label">
+                  <label for="gridSize">Taille de la grille</label>
+                  <span class="field-value" id="gridSizeValue">20³</span>
+                </div>
+                <input type="range" id="gridSize" min="8" max="160" step="1" value="20" />
+              </div>
+              <div class="segmented" id="boardShape" role="radiogroup" aria-label="Forme du plateau">
+                <button type="button" role="radio" data-shape="cube" aria-checked="true">Cube</button>
+                <button type="button" role="radio" data-shape="sphere" aria-checked="false">Sphère</button>
+                <button type="button" role="radio" data-shape="torus" aria-checked="false">Tore</button>
+              </div>
+              <div class="row-2">
+                <div class="field">
+                  <div class="field-label"><label for="boardSize" id="boardSizeLabel">Côté</label></div>
+                  <input type="number" id="boardSize" min="1" step="1" value="20" />
+                </div>
+                <div class="field" id="minorField" hidden>
+                  <div class="field-label"><label for="boardMinor">Diam. tube</label></div>
+                  <input type="number" id="boardMinor" min="1" step="1" value="5" />
+                </div>
+              </div>
+              <div class="field">
+                <div class="field-label">
+                  <label for="density">Densité initiale</label>
+                  <span class="field-value" id="densityValue">10 %</span>
+                </div>
+                <input type="range" id="density" min="0.02" max="0.6" step="0.01" value="0.1" />
+              </div>
+              <button id="btnBoard" class="btn-primary">Appliquer le plateau</button>
+              <p class="note note-warn" id="boardHint" hidden></p>
+            </div>
+          </details>
+
+          <details class="section">
+            <summary>Règle</summary>
+            <div class="section-body">
+              <div class="field">
+                <div class="field-label"><label for="rulePreset">Preset</label></div>
+                <select id="rulePreset"></select>
+              </div>
+              <div class="field">
+                <div class="field-label"><label for="ruleCustom">Spec manuelle</label></div>
+                <div class="row-grow">
+                  <input type="text" id="ruleCustom" placeholder="B5,6,7/S6,7,8" />
+                  <button id="btnRule">OK</button>
+                </div>
+              </div>
+              <p class="note">Changer de règle repart de la génération 0.</p>
+            </div>
+          </details>
+
+          <details class="section">
+            <summary>Seed</summary>
+            <div class="section-body">
+              <div class="field">
+                <div class="field-label"><label for="seedInput">Graine</label></div>
+                <div class="row-grow">
+                  <input type="text" id="seedInput" inputmode="numeric" />
+                  <button id="btnSeed">OK</button>
+                </div>
+              </div>
+              <button id="btnSeedRandom">Nouvelle seed aléatoire</button>
+              <p class="note">À seed et plateau identiques, la partie rejoue à l'identique.</p>
+            </div>
+          </details>
+
+          <details class="section">
+            <summary>Météores</summary>
+            <div class="section-body">
+              <label class="switch">
+                <input type="checkbox" id="noiseToggle" checked />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Impacts aléatoires</span>
+              </label>
+              <div class="field">
+                <div class="field-label">
+                  <label for="noiseRate">Fréquence</label>
+                  <span class="field-value" id="noiseRateValue">12 %</span>
+                </div>
+                <input type="range" id="noiseRate" min="0" max="0.6" step="0.01" value="0.12" />
+              </div>
+              <p class="note">Dépose un petit amas de cellules à un endroit au hasard, assez dense pour survivre.</p>
+            </div>
+          </details>
+
+          <details class="section">
+            <summary>Affichage</summary>
+            <div class="section-body">
+              <div class="field">
+                <div class="field-label"><label for="renderMode">Rendu</label></div>
+                <select id="renderMode">
+                  <option value="auto">Automatique</option>
+                  <option value="cubes">Cubes</option>
+                  <option value="volume">Volumétrique</option>
+                </select>
+              </div>
+              <div class="field" id="volumeDensityField" hidden>
+                <div class="field-label">
+                  <label for="volumeDensity">Opacité du volume</label>
+                  <span class="field-value" id="volumeDensityValue">3.5 %</span>
+                </div>
+                <input type="range" id="volumeDensity" min="0.005" max="0.2" step="0.005" value="0.035" />
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="optRotate" />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Rotation automatique</span>
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="optGhosts" checked />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Rémanence des morts</span>
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="optBoard" checked />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Contour du plateau</span>
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="optFrame" checked />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Repère et quadrillage</span>
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="optBloom" checked />
+                <span class="track"><span class="thumb"></span></span>
+                <span>Halo lumineux</span>
+              </label>
+              <button id="btnRecenter">Recadrer la vue</button>
+            </div>
+          </details>
+
+          <details class="section" open>
+            <summary>Mesures</summary>
+            <div class="section-body">
+              <div class="tiles">
+                <div class="tile">
+                  <div class="tile-label">Occupation</div>
+                  <div class="tile-value" id="statFill">—</div>
+                </div>
+                <div class="tile">
+                  <div class="tile-label">Renouvellement</div>
+                  <div class="tile-value" id="statChurn">—</div>
+                </div>
+              </div>
+              <div class="spark-wrap">
+                <div class="spark-head">
+                  <span class="spark-title">Population par génération</span>
+                  <span class="spark-current" id="sparkCurrent">—</span>
+                </div>
+                <canvas id="spark"></canvas>
+              </div>
+            </div>
+          </details>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" id="app">
+      // ------------------------------------------------------------------
+      // Chargement du moteur 3D
+      // ------------------------------------------------------------------
+      const boot = document.querySelector('#boot');
+      const bootText = document.querySelector('#bootText');
+      const bootSpinner = document.querySelector('#bootSpinner');
+
+      function fatal(message) {
+        bootSpinner.hidden = true;
+        boot.classList.remove('fade');
+        boot.hidden = false;
+        bootText.innerHTML = message;
       }
 
-      async function loadState() {
-        const response = await fetch('/state');
+      let THREE, OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, OutputPass;
+      try {
+        THREE = await import('three');
+        ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+        ({ EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js'));
+        ({ RenderPass } = await import('three/addons/postprocessing/RenderPass.js'));
+        ({ UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js'));
+        ({ OutputPass } = await import('three/addons/postprocessing/OutputPass.js'));
+      } catch (error) {
+        fatal(
+          "Impossible de charger Three.js depuis le CDN.<br />Vérifiez la connexion réseau, puis rechargez la page."
+        );
+        throw error;
+      }
+
+      // ------------------------------------------------------------------
+      // Constantes de rendu
+      // ------------------------------------------------------------------
+      const BG = 0x070a0e;
+      const BIRTH_MS = 220;   // pop-in d'une cellule qui naît
+      const GHOST_MS = 620;   // rémanence d'une cellule qui meurt
+      const MAX_GHOSTS = 5000;
+
+      // Rampe séquentielle chaude, claire -> sombre : une naissance est un
+      // éclat presque blanc (valeurs > 1 = HDR, c'est ce que le bloom capte),
+      // une cellule installée retombe sur une braise sourde.
+      // Calée sur les âges réellement observés : sous une règle vivante la
+      // quasi-totalité des cellules ont entre 0 et 8 générations, donc toute la
+      // rampe se joue là — au-delà elle serait invisible.
+      const AGE_STOPS = [
+        [0,  2.10, 1.62, 0.92],
+        [1,  1.22, 0.80, 0.34],
+        [2,  0.98, 0.56, 0.24],
+        [4,  0.78, 0.36, 0.19],
+        [8,  0.55, 0.22, 0.16],
+        [16, 0.38, 0.16, 0.14],
+      ];
+
+      function ageColor(age, out) {
+        let i = 0;
+        while (i < AGE_STOPS.length - 1 && age >= AGE_STOPS[i + 1][0]) i++;
+        const a = AGE_STOPS[i];
+        if (i === AGE_STOPS.length - 1) return out.setRGB(a[1], a[2], a[3]);
+        const b = AGE_STOPS[i + 1];
+        const t = (age - a[0]) / (b[0] - a[0]);
+        return out.setRGB(a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t);
+      }
+
+      const easeOutBack = (t) => {
+        const c = 1.70158, s = c + 1;
+        return 1 + s * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+      };
+
+      // Le shader lit la rampe dans une LUT construite depuis ageColor() : une
+      // seule définition du dégradé pour les deux rendus. En flottant, sinon
+      // les valeurs HDR des naissances seraient écrasées et ne bloomeraient plus.
+      function buildRampTexture() {
+        const data = new Float32Array(256 * 4);
+        const color = new THREE.Color();
+        for (let value = 1; value < 256; value++) {
+          ageColor(value - 1, color); // le volume stocke âge+1, 0 = case vide
+          data[value * 4] = color.r;
+          data[value * 4 + 1] = color.g;
+          data[value * 4 + 2] = color.b;
+          data[value * 4 + 3] = 1;
+        }
+        const texture = new THREE.DataTexture(data, 256, 1, THREE.RGBAFormat, THREE.FloatType);
+        texture.minFilter = texture.magFilter = THREE.NearestFilter;
+        texture.needsUpdate = true;
+        return texture;
+      }
+
+      const VOLUME_VERTEX = `
+        uniform vec3 uCameraLocal;
+        out vec3 vOrigin;
+        out vec3 vDirection;
+        void main() {
+          vOrigin = uCameraLocal;
+          vDirection = position - uCameraLocal;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `;
+
+      // Raymarching : le coût suit les pixels, plus le nombre de cellules. Et
+      // comme on accumule l'opacité pas à pas, on peut enfin voir à l'intérieur
+      // du volume au lieu de n'en percevoir que la croûte.
+      const VOLUME_FRAGMENT = `
+        precision highp sampler3D;
+
+        uniform sampler3D uVolume;
+        uniform sampler2D uRamp;
+        uniform float uSteps;
+        uniform float uDensity;
+        uniform float uExposure;
+
+        in vec3 vOrigin;
+        in vec3 vDirection;
+
+        // En GLSL3 three ne fournit pas gl_FragColor : on déclare la sortie.
+        out vec4 fragColor;
+
+        vec2 hitBox(vec3 origin, vec3 dir) {
+          vec3 invDir = 1.0 / dir;
+          vec3 a = (vec3(-0.5) - origin) * invDir;
+          vec3 b = (vec3( 0.5) - origin) * invDir;
+          vec3 near = min(a, b);
+          vec3 far  = max(a, b);
+          return vec2(max(near.x, max(near.y, near.z)), min(far.x, min(far.y, far.z)));
+        }
+
+        void main() {
+          vec3 dir = normalize(vDirection);
+          vec2 bounds = hitBox(vOrigin, dir);
+          if (bounds.x > bounds.y) discard;
+          bounds.x = max(bounds.x, 0.0);
+
+          float delta = (bounds.y - bounds.x) / uSteps;
+          vec3 p = vOrigin + dir * bounds.x;
+          vec3 accum = vec3(0.0);
+          float alpha = 0.0;
+
+          for (float i = 0.0; i < uSteps; i += 1.0) {
+            if (alpha > 0.97) break;
+            // numpy range en ordre C (z varie le plus vite) : la texture est
+            // créée en (sz, sy, sx), donc on échantillonne en .zyx.
+            float value = texture(uVolume, (p + 0.5).zyx).r;
+            if (value > 0.0) {
+              // La rampe est calibrée en HDR pour des cubes éclairés un par un ;
+              // accumulée le long d'un rayon elle sature en blanc, d'où l'exposition.
+              vec3 rgb = texture(uRamp, vec2((value * 255.0 + 0.5) / 256.0, 0.5)).rgb * uExposure;
+              float a = clamp(uDensity * delta * 64.0, 0.0, 1.0);
+              accum += (1.0 - alpha) * rgb * a;
+              alpha += (1.0 - alpha) * a;
+            }
+            p += dir * delta;
+          }
+
+          if (alpha < 0.004) discard;
+          fragColor = vec4(accum, alpha);
+        }
+      `;
+
+      // ------------------------------------------------------------------
+      // Scène
+      // ------------------------------------------------------------------
+      const canvas = document.querySelector('#scene');
+      const stage = canvas.parentElement;
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(BG);
+
+      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 4000);
+      camera.up.set(0, 0, 1); // z de la grille = haut
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.075;
+      controls.rotateSpeed = 0.85;
+      controls.autoRotateSpeed = 0.75;
+
+      // Un rim light saturé teinte toutes les faces à l'ombre en vert et efface
+      // la rampe d'âge : la lumière reste neutre/chaude, le rim juste assez
+      // présent pour détacher les silhouettes du fond.
+      scene.add(new THREE.HemisphereLight(0x9fb6c6, 0x241a10, 0.42));
+      const keyLight = new THREE.DirectionalLight(0xfff3e2, 2.0);
+      keyLight.position.set(1, 0.5, 1.15);
+      scene.add(keyLight);
+      const rimLight = new THREE.DirectionalLight(0x4d7f92, 0.24);
+      rimLight.position.set(-1, -0.85, 0.35);
+      scene.add(rimLight);
+
+      const world = new THREE.Group();
+      scene.add(world);
+
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.62, 0.45, 0.82);
+      composer.addPass(bloomPass);
+      composer.addPass(new OutputPass());
+
+      // ------------------------------------------------------------------
+      // Géométrie de la scène (dépend de la taille de grille)
+      // ------------------------------------------------------------------
+      let gridShape = null;
+      let cellMesh = null;
+      let ghostMesh = null;
+      let frameGroup = null;
+      let boardMesh = null;
+      let volumeMesh = null;
+      let volumeTexture = null;
+      let rampTexture = null;
+
+      // 'auto' bascule sur le volumétrique quand le cube devient trop gros pour
+      // qu'on distingue encore une cellule (et trop lourd en instances).
+      const AUTO_VOLUME_FROM = 64 ** 3;
+      let renderMode = 'auto';
+      let volumeDensity = 0.035;
+
+      function effectiveMode() {
+        if (renderMode !== 'auto') return renderMode;
+        if (!gridShape) return 'cubes';
+        return gridShape[0] * gridShape[1] * gridShape[2] >= AUTO_VOLUME_FROM ? 'volume' : 'cubes';
+      }
+
+      const dummy = new THREE.Object3D();
+      const tmpColor = new THREE.Color();
+
+      function disposeObject(object) {
+        if (!object) return;
+        object.traverse?.((child) => {
+          child.geometry?.dispose();
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+          else child.material?.dispose();
+        });
+        object.parent?.remove(object);
+      }
+
+      function buildWorld(shape) {
+        const [sx, sy, sz] = shape;
+        gridShape = shape;
+
+        for (const child of [...world.children]) disposeObject(child);
+        world.clear();
+        cellMesh = ghostMesh = volumeMesh = boardMesh = frameGroup = null;
+        volumeTexture = null;
+        world.position.set(-(sx - 1) / 2, -(sy - 1) / 2, -(sz - 1) / 2);
+
+        frameGroup = buildFrame(sx, sy, sz);
+        frameGroup.visible = options.frame;
+        world.add(frameGroup);
+
+        const maxSide = Math.max(sx, sy, sz);
+        scene.fog = new THREE.FogExp2(BG, 0.34 / maxSide);
+        controls.minDistance = maxSide * 0.5;
+        controls.maxDistance = maxSide * 8;
+
+        applyRenderMode();
+        recenter();
+      }
+
+      // Les deux rendus sont créés à la demande : en volumétrique, allouer
+      // quand même 1,4 M d'instances (~106 Mo de matrices) pour ne jamais les
+      // dessiner suffisait à faire tomber le navigateur au changement de grille.
+      function ensureCubes() {
+        if (cellMesh || !gridShape) return;
+        const [sx, sy, sz] = gridShape;
+        capacity = Math.min(sx * sy * sz, MAX_INSTANCES);
+
+        // Cubes nettement plus petits que la maille : les interstices laissent
+        // voir l'intérieur du volume, sinon une soupe à 30 % n'est qu'un bloc opaque.
+        cellMesh = new THREE.InstancedMesh(
+          new THREE.BoxGeometry(0.72, 0.72, 0.72),
+          new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.06 }),
+          capacity
+        );
+        cellMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        cellMesh.setColorAt(0, tmpColor.setRGB(1, 1, 1));
+        cellMesh.frustumCulled = false;
+        cellMesh.count = 0;
+        world.add(cellMesh);
+
+        ghostMesh = new THREE.InstancedMesh(
+          new THREE.BoxGeometry(0.5, 0.5, 0.5),
+          new THREE.MeshBasicMaterial({
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          }),
+          MAX_GHOSTS
+        );
+        ghostMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        ghostMesh.setColorAt(0, tmpColor.setRGB(1, 1, 1));
+        ghostMesh.frustumCulled = false;
+        ghostMesh.count = 0;
+        world.add(ghostMesh);
+      }
+
+      function ensureVolume() {
+        if (volumeMesh || !gridShape) return;
+        const [sx, sy, sz] = gridShape;
+        const maxSide = Math.max(sx, sy, sz);
+
+        if (!rampTexture) rampTexture = buildRampTexture();
+        // Ordre C de numpy : z varie le plus vite, donc la largeur de la
+        // texture est sz et la profondeur sx (le shader compense en .zyx).
+        volumeTexture = new THREE.Data3DTexture(new Uint8Array(sx * sy * sz), sz, sy, sx);
+        volumeTexture.format = THREE.RedFormat;
+        volumeTexture.type = THREE.UnsignedByteType;
+        volumeTexture.minFilter = volumeTexture.magFilter = THREE.NearestFilter;
+        volumeTexture.unpackAlignment = 1;
+        volumeTexture.needsUpdate = true;
+
+        volumeMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          new THREE.ShaderMaterial({
+            glslVersion: THREE.GLSL3,
+            vertexShader: VOLUME_VERTEX,
+            fragmentShader: VOLUME_FRAGMENT,
+            uniforms: {
+              uVolume: { value: volumeTexture },
+              uRamp: { value: rampTexture },
+              // Un pas par voxel de diagonale ferait ~280 échantillons par pixel
+              // à 160³, soit 170 M de lectures de texture par image : on plafonne.
+              uSteps: { value: Math.min(144, Math.max(64, Math.round(maxSide * 0.9))) },
+              uDensity: { value: volumeDensity },
+              uExposure: { value: 0.42 },
+              uCameraLocal: { value: new THREE.Vector3() },
+            },
+            side: THREE.BackSide, // on marche depuis les faces arrière : marche aussi de l'intérieur
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        volumeMesh.scale.set(sx, sy, sz);
+        volumeMesh.position.set((sx - 1) / 2, (sy - 1) / 2, (sz - 1) / 2);
+        volumeMesh.frustumCulled = false;
+        world.add(volumeMesh);
+      }
+
+      function disposeCubes() {
+        if (!cellMesh) return;
+        disposeObject(cellMesh);
+        disposeObject(ghostMesh);
+        cellMesh = ghostMesh = null;
+        liveCells.clear();
+        ghosts.length = 0;
+      }
+
+      function disposeVolume() {
+        if (!volumeMesh) return;
+        disposeObject(volumeMesh);
+        volumeTexture?.dispose();
+        volumeMesh = null;
+        volumeTexture = null;
+      }
+
+      function applyRenderMode() {
+        if (!gridShape) return;
+        if (effectiveMode() === 'volume') {
+          disposeCubes();
+          ensureVolume();
+        } else {
+          disposeVolume();
+          ensureCubes();
+        }
+      }
+
+      function buildFrame(sx, sy, sz) {
+        const group = new THREE.Group();
+        const X = sx - 1, Y = sy - 1, Z = sz - 1;
+        const stepX = Math.max(1, Math.round(sx / 10));
+        const stepY = Math.max(1, Math.round(sy / 10));
+        const stepZ = Math.max(1, Math.round(sz / 10));
+
+        // Sol + deux parois quadrillés : le repère qui rend la profondeur lisible.
+        const grid = [];
+        for (let x = 0; x <= X; x += stepX) grid.push(x, 0, 0, x, Y, 0);
+        for (let y = 0; y <= Y; y += stepY) grid.push(0, y, 0, X, y, 0);
+        for (let x = 0; x <= X; x += stepX) grid.push(x, Y, 0, x, Y, Z);
+        for (let z = 0; z <= Z; z += stepZ) grid.push(0, Y, z, X, Y, z);
+        for (let y = 0; y <= Y; y += stepY) grid.push(X, y, 0, X, y, Z);
+        for (let z = 0; z <= Z; z += stepZ) grid.push(X, 0, z, X, Y, z);
+
+        const gridGeo = new THREE.BufferGeometry();
+        gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(grid, 3));
+        group.add(new THREE.LineSegments(
+          gridGeo,
+          new THREE.LineBasicMaterial({ color: 0x2c4450, transparent: true, opacity: 0.55 })
+        ));
+
+        // Les 12 arêtes du cube englobant.
+        const edges = [];
+        const ranges = [[0, X], [0, Y], [0, Z]];
+        for (let axis = 0; axis < 3; axis++) {
+          const [o1, o2] = [0, 1, 2].filter((a) => a !== axis);
+          for (const v1 of ranges[o1]) {
+            for (const v2 of ranges[o2]) {
+              const p1 = [0, 0, 0], p2 = [0, 0, 0];
+              p1[o1] = p2[o1] = v1;
+              p1[o2] = p2[o2] = v2;
+              p1[axis] = ranges[axis][0];
+              p2[axis] = ranges[axis][1];
+              edges.push(...p1, ...p2);
+            }
+          }
+        }
+
+        const edgeGeo = new THREE.BufferGeometry();
+        edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
+        group.add(new THREE.LineSegments(
+          edgeGeo,
+          new THREE.LineBasicMaterial({ color: 0x5fd4c4, transparent: true, opacity: 0.32 })
+        ));
+
+        return group;
+      }
+
+      // Le contour du plateau : on voit enfin la sphère / le tore qui contient la soupe.
+      function buildBoard(board) {
+        disposeObject(boardMesh);
+        boardMesh = null;
+        if (!gridShape) return;
+
+        const material = new THREE.LineBasicMaterial({
+          color: 0x5fd4c4,
+          transparent: true,
+          opacity: 0.15,
+        });
+
+        // Peu de segments : un fil de fer trop dense accumule les lignes et
+        // devient un mur opaque qui masque les cellules qu'il contient.
+        let geometry;
+        if (board.shape === 'sphere') {
+          geometry = new THREE.SphereGeometry(board.size, 16, 10);
+        } else if (board.shape === 'torus') {
+          geometry = new THREE.TorusGeometry(board.size, Math.max(0.1, board.minor / 2), 8, 22);
+        } else {
+          geometry = new THREE.BoxGeometry(board.size, board.size, board.size);
+        }
+
+        boardMesh = new THREE.LineSegments(new THREE.WireframeGeometry(geometry), material);
+        geometry.dispose();
+        boardMesh.position.set((gridShape[0] - 1) / 2, (gridShape[1] - 1) / 2, (gridShape[2] - 1) / 2);
+        boardMesh.visible = options.board;
+        world.add(boardMesh);
+      }
+
+      function recenter() {
+        if (!gridShape) return;
+        const maxSide = Math.max(...gridShape);
+        const distance = maxSide * 1.85;
+        camera.position.set(distance * 0.72, -distance * 0.78, distance * 0.52);
+        controls.target.set(0, 0, 0);
+        controls.update();
+      }
+
+      function resize() {
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        if (!width || !height) return;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height, false);
+        composer.setSize(width, height);
+      }
+
+      new ResizeObserver(resize).observe(stage);
+
+      // ------------------------------------------------------------------
+      // État de la simulation côté client
+      // ------------------------------------------------------------------
+      let liveCells = new Map(); // index aplati -> { x, y, z, age, born }  (mode riche)
+      let ghosts = [];
+      let population = 0;
+      let lastChurn = 0;
+      let capacity = 0;
+      let clipped = false;
+      let frame = null; // dernier état décodé, pour le mode rapide
+
+      // Deux régimes. Sous ANIM_LIMIT on tient une Map par cellule : c'est ce
+      // qui paie l'animation de naissance et la rémanence. Au-delà, allouer un
+      // objet par cellule à chaque étape (420 000 à 120³) coûterait plus cher
+      // que tout le reste du rendu — on écrit alors directement dans les buffers
+      // d'instances depuis le masque binaire, sans une seule allocation.
+      const ANIM_LIMIT = 40000;
+      const MAX_INSTANCES = 1400000;
+      let dirty = false;
+      let animateUntil = 0;
+      let richMode = true;
+
+      const options = { ghosts: true, board: true, frame: true };
+
+      // En-tête commun aux deux flux (/state/bin et /state/vol) ; seule la
+      // charge utile qui suit change de nature.
+      const STATE_HEADER_BYTES = 32;
+
+      function decodeState(buffer) {
+        const view = new DataView(buffer);
+        if (view.getUint32(0, true) !== 0x4c494645) throw new Error('flux binaire invalide');
+        return {
+          buffer,
+          shape: [view.getUint16(8, true), view.getUint16(10, true), view.getUint16(12, true)],
+          generation: view.getUint32(16, true),
+          liveCount: view.getUint32(20, true),
+          payloadBytes: view.getUint32(24, true),
+          churn: view.getUint32(28, true),
+        };
+      }
+
+      function attachBinViews(decoded) {
+        decoded.mask = new Uint8Array(decoded.buffer, STATE_HEADER_BYTES, decoded.payloadBytes);
+        decoded.ages = new Uint8Array(
+          decoded.buffer, STATE_HEADER_BYTES + decoded.payloadBytes, decoded.liveCount
+        );
+        return decoded;
+      }
+
+      // Parcourt le masque et appelle visit(index, âge) pour chaque cellule
+      // vivante, dans l'ordre C. Sauter les octets nuls d'un bloc fait
+      // l'essentiel du travail dès que la grille est creuse.
+      function eachLive(decoded, visit) {
+        const { mask, ages } = decoded;
+        let ageIndex = 0;
+        for (let byte = 0; byte < mask.length; byte++) {
+          const bits = mask[byte];
+          if (bits === 0) continue;
+          const base = byte << 3;
+          for (let bit = 0; bit < 8; bit++) {
+            if ((bits & (0x80 >> bit)) === 0) continue;
+            visit(base + bit, ages[ageIndex++]);
+          }
+        }
+      }
+
+      function ingest(decoded) {
+        const now = performance.now();
+        const [, sy, sz] = decoded.shape;
+        population = decoded.liveCount;
+        lastChurn = decoded.churn;
+        richMode = decoded.liveCount <= ANIM_LIMIT;
+        frame = decoded;
+        dirty = true;
+        animateUntil = now + BIRTH_MS;
+
+        if (!richMode) {
+          liveCells.clear();
+          ghosts.length = 0;
+          return;
+        }
+
+        const next = new Map();
+        eachLive(decoded, (index, age) => {
+          const z = index % sz;
+          const rest = (index - z) / sz;
+          const y = rest % sy;
+          const x = (rest - y) / sy;
+          const previous = liveCells.get(index);
+          next.set(index, { x, y, z, age, born: previous ? previous.born : now });
+        });
+
+        if (options.ghosts) {
+          for (const [index, cell] of liveCells) {
+            if (next.has(index)) continue;
+            ghosts.push({ x: cell.x, y: cell.y, z: cell.z, died: now });
+          }
+          if (ghosts.length > MAX_GHOSTS) ghosts = ghosts.slice(-MAX_GHOSTS);
+        } else {
+          ghosts.length = 0;
+        }
+
+        liveCells = next;
+      }
+
+      // La matrice d'un cube aligné à l'échelle 1 se réduit à 16 flottants
+      // connus d'avance : on les écrit dans le buffer sans passer par
+      // Object3D/Matrix4 ni setMatrixAt, ce qui change tout à 400 000 cellules.
+      function writeDirect(decoded) {
+        const matrices = cellMesh.instanceMatrix.array;
+        const colors = cellMesh.instanceColor.array;
+        const [, sy, sz] = decoded.shape;
+        let i = 0;
+        eachLive(decoded, (index, age) => {
+          if (i >= capacity) return;
+          const z = index % sz;
+          const rest = (index - z) / sz;
+          const y = rest % sy;
+          const x = (rest - y) / sy;
+          const m = i * 16;
+          matrices[m] = 1; matrices[m + 1] = 0; matrices[m + 2] = 0; matrices[m + 3] = 0;
+          matrices[m + 4] = 0; matrices[m + 5] = 1; matrices[m + 6] = 0; matrices[m + 7] = 0;
+          matrices[m + 8] = 0; matrices[m + 9] = 0; matrices[m + 10] = 1; matrices[m + 11] = 0;
+          matrices[m + 12] = x; matrices[m + 13] = y; matrices[m + 14] = z; matrices[m + 15] = 1;
+          ageColor(age, tmpColor);
+          const c = i * 3;
+          colors[c] = tmpColor.r; colors[c + 1] = tmpColor.g; colors[c + 2] = tmpColor.b;
+          i++;
+        });
+        cellMesh.count = i;
+        clipped = decoded.liveCount > capacity;
+      }
+
+      function updateInstances(now) {
+        if (!cellMesh) return;
+
+        const animating = richMode && now < animateUntil;
+        const fading = richMode && options.ghosts && ghosts.length > 0;
+        if (!dirty && !animating && !fading) return;
+        dirty = false;
+
+        if (!richMode) {
+          if (frame) writeDirect(frame);
+        } else {
+          let i = 0;
+          for (const cell of liveCells.values()) {
+            if (i >= capacity) break;
+            const t = animating ? Math.min(1, (now - cell.born) / BIRTH_MS) : 1;
+            dummy.position.set(cell.x, cell.y, cell.z);
+            dummy.scale.setScalar(t >= 1 ? 1 : Math.max(0.01, easeOutBack(t)));
+            dummy.updateMatrix();
+            cellMesh.setMatrixAt(i, dummy.matrix);
+            cellMesh.setColorAt(i, ageColor(cell.age, tmpColor));
+            i++;
+          }
+          cellMesh.count = i;
+        }
+        cellMesh.instanceMatrix.needsUpdate = true;
+        if (cellMesh.instanceColor) cellMesh.instanceColor.needsUpdate = true;
+
+        let g = 0;
+        if (richMode && options.ghosts && ghosts.length) {
+          let write = 0;
+          for (let k = 0; k < ghosts.length; k++) {
+            const ghost = ghosts[k];
+            const t = (now - ghost.died) / GHOST_MS;
+            if (t >= 1) continue;
+            ghosts[write++] = ghost;
+            if (g >= MAX_GHOSTS) continue;
+            const fade = (1 - t) * (1 - t);
+            dummy.position.set(ghost.x, ghost.y, ghost.z);
+            dummy.scale.setScalar(0.35 + t * 0.8);
+            dummy.updateMatrix();
+            ghostMesh.setMatrixAt(g, dummy.matrix);
+            // Additif : une couleur sombre disparaît d'elle-même, pas besoin
+            // d'opacité par instance (que three ne propose pas).
+            ghostMesh.setColorAt(g, tmpColor.setRGB(0.10 * fade, 0.34 * fade, 0.40 * fade));
+            g++;
+          }
+          ghosts.length = write;
+        }
+        ghostMesh.count = g;
+        if (g) {
+          ghostMesh.instanceMatrix.needsUpdate = true;
+          if (ghostMesh.instanceColor) ghostMesh.instanceColor.needsUpdate = true;
+        }
+      }
+
+      const localCamera = new THREE.Vector3();
+      const inverseModel = new THREE.Matrix4();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        if (volumeMesh) {
+          // Le raymarching part de la caméra exprimée dans l'espace du cube.
+          volumeMesh.updateMatrixWorld();
+          inverseModel.copy(volumeMesh.matrixWorld).invert();
+          localCamera.copy(camera.position).applyMatrix4(inverseModel);
+          volumeMesh.material.uniforms.uCameraLocal.value.copy(localCamera);
+        } else {
+          updateInstances(performance.now());
+        }
+        composer.render();
+      }
+
+      // ------------------------------------------------------------------
+      // API
+      // ------------------------------------------------------------------
+      async function api(path, init) {
+        const response = await fetch(path, init);
+        if (!response.ok) {
+          let detail = `HTTP ${response.status}`;
+          try {
+            const body = await response.json();
+            if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : detail;
+          } catch { /* réponse non JSON */ }
+          throw new Error(detail);
+        }
+        return response.json();
+      }
+
+      const post = (path, params) =>
+        api(params ? `${path}?${new URLSearchParams(params)}` : path, { method: 'POST' });
+
+      // ------------------------------------------------------------------
+      // Interface
+      // ------------------------------------------------------------------
+      const $ = (selector) => document.querySelector(selector);
+
+      const chipRule = $('#chipRule');
+      const chipGrid = $('#chipGrid');
+      const chipStatus = $('#chipStatus');
+      const chipStatusText = $('#chipStatusText');
+      const hudGen = $('#hudGen');
+      const hudPop = $('#hudPop');
+      const statFill = $('#statFill');
+      const statChurn = $('#statChurn');
+      const sparkCurrent = $('#sparkCurrent');
+
+      const numberFormat = new Intl.NumberFormat('fr-FR');
+      const history = [];
+
+      function setStatus(text, state) {
+        chipStatusText.textContent = text;
+        chipStatus.dataset.state = state;
+      }
+
+      function fail(error) {
+        setStatus(error.message, 'error');
+      }
+
+      function bindRange(input, format, onCommit) {
+        const paint = () => {
+          const min = Number(input.min), max = Number(input.max);
+          const pct = ((Number(input.value) - min) / (max - min)) * 100;
+          input.style.setProperty('--fill', `${pct}%`);
+          format(Number(input.value));
+        };
+        input.addEventListener('input', paint);
+        if (onCommit) input.addEventListener('change', () => onCommit(Number(input.value)));
+        paint();
+        return paint;
+      }
+
+      // --- transport -----------------------------------------------------
+      let running = false;
+      let stepInterval = 1000 / 6;
+
+      const btnPlay = $('#btnPlay');
+
+      async function stepOnce() {
+        await post('/step');
+        await refreshState();
+      }
+
+      async function runLoop() {
+        while (running) {
+          const started = performance.now();
+          try {
+            await stepOnce();
+          } catch (error) {
+            running = false;
+            syncPlayButton();
+            fail(error);
+            return;
+          }
+          // Toujours rendre la main, même en retard : sur une grosse grille une
+          // étape dépasse l'intervalle visé, et enchaîner sans pause affame le
+          // rendu au point de figer la page.
+          const remaining = stepInterval - (performance.now() - started);
+          await new Promise((resolve) => setTimeout(resolve, Math.max(16, remaining)));
+        }
+      }
+
+      function syncPlayButton() {
+        btnPlay.textContent = running ? 'Pause' : 'Lancer';
+        setStatus(running ? 'Simulation en cours' : 'En pause', running ? 'live' : 'idle');
+      }
+
+      function togglePlay() {
+        running = !running;
+        syncPlayButton();
+        if (running) runLoop();
+      }
+
+      btnPlay.addEventListener('click', togglePlay);
+      $('#btnStep').addEventListener('click', () => stepOnce().catch(fail));
+      $('#btnReset').addEventListener('click', () => post('/reset').then(afterReseed).catch(fail));
+
+      bindRange($('#speed'), (value) => { $('#speedValue').textContent = `${value} gén/s`; },
+        (value) => { stepInterval = 1000 / value; });
+
+      // --- plateau -------------------------------------------------------
+      const boardShape = $('#boardShape');
+      const boardSize = $('#boardSize');
+      const boardMinor = $('#boardMinor');
+      const minorField = $('#minorField');
+      const boardSizeLabel = $('#boardSizeLabel');
+      const densityInput = $('#density');
+      const gridSizeInput = $('#gridSize');
+      const boardHint = $('#boardHint');
+
+      const SIZE_LABELS = { cube: 'Côté', sphere: 'Rayon', torus: 'Grand rayon' };
+      let currentShape = 'cube';
+
+      const paintGrid = bindRange(gridSizeInput, (value) => {
+        const cells = value ** 3;
+        $('#gridSizeValue').textContent = `${value}³ · ${numberFormat.format(cells)} cases`;
+      });
+
+      function showHint(hint) {
+        boardHint.hidden = !hint;
+        if (hint) boardHint.textContent = hint;
+      }
+
+      const paintDensity = bindRange(densityInput, (value) => {
+        $('#densityValue').textContent = `${Math.round(value * 100)} %`;
+      });
+
+      function syncShapeUI() {
+        for (const button of boardShape.querySelectorAll('button')) {
+          button.setAttribute('aria-checked', String(button.dataset.shape === currentShape));
+        }
+        boardSizeLabel.textContent = SIZE_LABELS[currentShape];
+        minorField.hidden = currentShape !== 'torus';
+      }
+
+      // Une sphère de rayon 20 dans une grille de 20 déborde (donc = un cube) ;
+      // un tore de grand rayon 20 ne touche aucune cellule (grille vide). On
+      // recalcule donc une taille qui vient affleurer le bord de la grille.
+      function shapeDefaults(shape) {
+        // On se cale sur la grille que l'utilisateur s'apprête à appliquer,
+        // pas sur celle actuellement affichée.
+        const minDim = Number(gridSizeInput.value) || Math.min(...(gridShape ?? [20, 20, 20]));
+        const halfExtent = (minDim - 1) / 2;
+        if (shape === 'sphere') return { size: Math.max(1, Math.round(halfExtent)), minor: null };
+        if (shape === 'torus') {
+          const minor = Math.max(2, Math.round(minDim / 5));
+          return { size: Math.max(1, Math.round(halfExtent - minor / 2)), minor };
+        }
+        return { size: minDim, minor: null };
+      }
+
+      boardShape.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-shape]');
+        if (!button) return;
+        currentShape = button.dataset.shape;
+        const defaults = shapeDefaults(currentShape);
+        boardSize.value = defaults.size;
+        if (defaults.minor !== null) boardMinor.value = defaults.minor;
+        syncShapeUI();
+      });
+
+      $('#btnBoard').addEventListener('click', () => {
+        post('/board', {
+          shape: currentShape,
+          size: boardSize.value,
+          minor: boardMinor.value || 1,
+          density: densityInput.value,
+          grid: gridSizeInput.value,
+        }).then((board) => {
+          showHint(board.hint);
+          return afterReseed();
+        }).catch(fail);
+      });
+
+      // --- règle ---------------------------------------------------------
+      const rulePreset = $('#rulePreset');
+
+      rulePreset.addEventListener('change', () => {
+        post('/rule', { spec: rulePreset.value }).then(afterReseed).catch(fail);
+      });
+
+      $('#btnRule').addEventListener('click', () => {
+        const spec = $('#ruleCustom').value.trim();
+        if (!spec) return;
+        post('/rule', { spec }).then(afterReseed).catch(fail);
+      });
+
+      // --- seed ----------------------------------------------------------
+      const seedInput = $('#seedInput');
+
+      $('#btnSeed').addEventListener('click', () => {
+        post('/seed', { value: seedInput.value }).then(afterReseed).catch(fail);
+      });
+
+      $('#btnSeedRandom').addEventListener('click', () => {
+        post('/seed/random')
+          .then((data) => { seedInput.value = data.seed; return afterReseed(); })
+          .catch(fail);
+      });
+
+      // --- météores ------------------------------------------------------
+      const noiseToggle = $('#noiseToggle');
+      const noiseRate = $('#noiseRate');
+
+      const pushNoise = () =>
+        post('/noise', { enabled: noiseToggle.checked, rate: noiseRate.value }).catch(fail);
+
+      noiseToggle.addEventListener('change', pushNoise);
+      const paintNoise = bindRange(noiseRate, (value) => {
+        $('#noiseRateValue').textContent = `${Math.round(value * 100)} %`;
+      }, pushNoise);
+
+      // --- affichage -----------------------------------------------------
+      const volumeDensityField = $('#volumeDensityField');
+
+      function syncRenderModeUI() {
+        volumeDensityField.hidden = effectiveMode() !== 'volume';
+      }
+
+      $('#renderMode').addEventListener('change', (event) => {
+        renderMode = event.target.value;
+        applyRenderMode();
+        syncRenderModeUI();
+        refreshState().catch(fail);
+      });
+
+      bindRange($('#volumeDensity'), (value) => {
+        $('#volumeDensityValue').textContent = `${(value * 100).toFixed(1)} %`;
+        volumeDensity = value;
+        if (volumeMesh) volumeMesh.material.uniforms.uDensity.value = value;
+      });
+
+      $('#optRotate').addEventListener('change', (event) => {
+        controls.autoRotate = event.target.checked;
+      });
+      $('#optGhosts').addEventListener('change', (event) => {
+        options.ghosts = event.target.checked;
+        if (!options.ghosts) { ghosts.length = 0; ghostMesh.count = 0; }
+      });
+      $('#optBoard').addEventListener('change', (event) => {
+        options.board = event.target.checked;
+        if (boardMesh) boardMesh.visible = options.board;
+      });
+      $('#optFrame').addEventListener('change', (event) => {
+        options.frame = event.target.checked;
+        if (frameGroup) frameGroup.visible = options.frame;
+      });
+      $('#optBloom').addEventListener('change', (event) => {
+        bloomPass.enabled = event.target.checked;
+      });
+      $('#btnRecenter').addEventListener('click', recenter);
+
+      // --- clavier -------------------------------------------------------
+      window.addEventListener('keydown', (event) => {
+        const tag = event.target.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (event.key === ' ') { event.preventDefault(); togglePlay(); }
+        else if (event.key === 's' || event.key === 'S') stepOnce().catch(fail);
+        else if (event.key === 'r' || event.key === 'R') post('/reset').then(afterReseed).catch(fail);
+        else if (event.key === 'n' || event.key === 'N') $('#btnSeedRandom').click();
+      });
+
+      // ------------------------------------------------------------------
+      // Sparkline population (série unique : pas de légende, valeur en bout)
+      // ------------------------------------------------------------------
+      const spark = $('#spark');
+      const sparkCtx = spark.getContext('2d');
+
+      function drawSpark() {
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        const width = spark.clientWidth;
+        const height = spark.clientHeight;
+        if (!width || !height) return;
+        spark.width = Math.round(width * ratio);
+        spark.height = Math.round(height * ratio);
+        sparkCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        sparkCtx.clearRect(0, 0, width, height);
+        if (history.length < 2) return;
+
+        const pad = 5;
+        const max = Math.max(...history, 1);
+        const stepX = (width - pad * 2) / (history.length - 1);
+        const toY = (value) => height - pad - (value / max) * (height - pad * 2);
+        const points = history.map((value, i) => [pad + i * stepX, toY(value)]);
+
+        // Lavis à ~10 % sous la courbe.
+        sparkCtx.beginPath();
+        sparkCtx.moveTo(points[0][0], height - pad);
+        for (const [x, y] of points) sparkCtx.lineTo(x, y);
+        sparkCtx.lineTo(points[points.length - 1][0], height - pad);
+        sparkCtx.closePath();
+        sparkCtx.fillStyle = 'rgba(14, 165, 146, 0.1)';
+        sparkCtx.fill();
+
+        // Ligne 2 px, jointures rondes.
+        sparkCtx.beginPath();
+        points.forEach(([x, y], i) => (i ? sparkCtx.lineTo(x, y) : sparkCtx.moveTo(x, y)));
+        sparkCtx.strokeStyle = '#0ea592';
+        sparkCtx.lineWidth = 2;
+        sparkCtx.lineJoin = 'round';
+        sparkCtx.lineCap = 'round';
+        sparkCtx.stroke();
+
+        // Point courant en accent, avec anneau de surface.
+        const [lastX, lastY] = points[points.length - 1];
+        sparkCtx.beginPath();
+        sparkCtx.arc(lastX, lastY, 4.5, 0, Math.PI * 2);
+        sparkCtx.fillStyle = '#5fd4c4';
+        sparkCtx.strokeStyle = '#131c25';
+        sparkCtx.lineWidth = 2;
+        sparkCtx.fill();
+        sparkCtx.stroke();
+      }
+
+      new ResizeObserver(drawSpark).observe(spark);
+
+      // ------------------------------------------------------------------
+      // Synchronisation
+      // ------------------------------------------------------------------
+      async function refreshState(retry = true) {
+        const volumetric = effectiveMode() === 'volume';
+        const response = await fetch(volumetric ? '/state/vol' : '/state/bin');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        state = await response.json();
-        document.querySelector('#ndim').textContent = `${state.ndim}D`;
-        document.querySelector('#shape').textContent = state.shape.join(' × ');
-        document.querySelector('#count').textContent = state.live_cells.length;
-        status.textContent = state.ndim === 3 ? 'Grille 3D active' : 'Le serveur doit être configuré en 3D';
-        draw();
+        const buffer = await response.arrayBuffer();
+        const decoded = decodeState(buffer);
+
+        if (!gridShape || gridShape.join() !== decoded.shape.join()) {
+          buildWorld(decoded.shape);
+          chipGrid.textContent = decoded.shape.join(' × ');
+        }
+        applyRenderMode();
+
+        // En mode auto, la nouvelle taille de grille peut avoir changé le rendu
+        // retenu : la charge qu'on vient de recevoir n'est alors pas la bonne.
+        if (retry && (effectiveMode() === 'volume') !== volumetric) return refreshState(false);
+
+        if (volumetric) {
+          // Recopie directe vers le GPU : aucun décodage côté client.
+          volumeTexture.image.data.set(new Uint8Array(buffer, STATE_HEADER_BYTES, decoded.payloadBytes));
+          volumeTexture.needsUpdate = true;
+          population = decoded.liveCount;
+          lastChurn = decoded.churn;
+          clipped = false;
+        } else {
+          ingest(attachBinViews(decoded));
+        }
+
+        const volume = decoded.shape[0] * decoded.shape[1] * decoded.shape[2];
+        hudGen.textContent = numberFormat.format(decoded.generation);
+        hudPop.textContent = numberFormat.format(population);
+        statFill.textContent = `${((population / volume) * 100).toFixed(1)} %`;
+        statChurn.textContent = numberFormat.format(lastChurn);
+        sparkCurrent.textContent = numberFormat.format(population);
+        if (clipped) setStatus(`Affichage écrêté à ${numberFormat.format(capacity)} cubes`, 'idle');
+
+        history.push(population);
+        if (history.length > 160) history.shift();
+        drawSpark();
+        syncRenderModeUI();
+
+        return decoded;
       }
 
-      async function step() {
-        await fetch('/step', { method: 'POST' });
-        generation.textContent = Number(generation.textContent) + 1;
-        await loadState();
+      // Seed et règle ne bougent qu'au réamorçage : inutile de les faire
+      // transiter à chaque étape dans le flux chaud.
+      async function refreshMeta() {
+        const meta = await api('/meta');
+        if (meta.ndim !== 3) {
+          setStatus('Le serveur doit être configuré en 3D', 'error');
+          return;
+        }
+        chipRule.textContent = meta.rule ?? '—';
+        seedInput.value = meta.seed ?? '';
       }
 
-      function formatRate(rate) {
-        return `${(rate * 100).toFixed(0)} %`;
+      async function afterReseed() {
+        history.length = 0;
+        liveCells.clear();
+        ghosts.length = 0;
+        await refreshState();
+        // Le contour doit refléter le plateau réellement appliqué par le serveur,
+        // pas ce que contiennent les champs du formulaire.
+        await Promise.all([refreshMeta(), loadRules(), loadBoard()]);
       }
 
-      async function pushNoise() {
-        const params = new URLSearchParams({
-          enabled: noiseToggle.checked,
-          rate: noiseRate.value,
-        });
-        await fetch(`/noise?${params}`, { method: 'POST' });
+      async function loadRules() {
+        const data = await api('/rules');
+        rulePreset.innerHTML = '';
+        for (const preset of data.presets) {
+          const option = document.createElement('option');
+          option.value = preset.name;
+          option.textContent = `${preset.name.replace(/^life_\d+d_/, '')} — ${preset.spec}`;
+          rulePreset.append(option);
+        }
+        if (!data.presets.some((preset) => preset.name === data.current)) {
+          const option = document.createElement('option');
+          option.value = data.current;
+          option.textContent = `personnalisée — ${data.spec}`;
+          rulePreset.append(option);
+        }
+        rulePreset.value = data.current;
+      }
+
+      async function loadBoard() {
+        const board = await api('/board');
+        currentShape = board.shape;
+        boardSize.value = board.size;
+        boardMinor.value = board.minor;
+        densityInput.value = board.density;
+        gridSizeInput.min = board.grid_min;
+        gridSizeInput.max = board.grid_max;
+        gridSizeInput.value = board.grid;
+        paintDensity();
+        paintGrid();
+        syncShapeUI();
+        showHint(board.hint);
+        buildBoard(board);
       }
 
       async function loadNoise() {
-        const response = await fetch('/noise');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const noise = await response.json();
+        const noise = await api('/noise');
         noiseToggle.checked = noise.enabled;
         noiseRate.value = noise.rate;
-        noiseRateValue.textContent = formatRate(noise.rate);
+        paintNoise();
       }
 
-      document.querySelector('#step').addEventListener('click', () => step().catch(showError));
-      document.querySelector('#reset').addEventListener('click', async () => {
-        await fetch('/reset', { method: 'POST' });
-        generation.textContent = '0';
-        await loadState();
-      });
-      document.querySelector('#play').addEventListener('click', (event) => {
-        if (timer) { clearInterval(timer); timer = null; event.target.textContent = 'Lancer la simulation'; event.target.classList.remove('active'); return; }
-        timer = setInterval(() => step().catch(showError), 700);
-        event.target.textContent = 'Mettre en pause'; event.target.classList.add('active');
-      });
-      noiseToggle.addEventListener('change', () => pushNoise().catch(showError));
-      noiseRate.addEventListener('input', () => {
-        noiseRateValue.textContent = formatRate(Number(noiseRate.value));
-      });
-      noiseRate.addEventListener('change', () => pushNoise().catch(showError));
-      function showError(error) { status.textContent = `Erreur : ${error.message}`; }
-      window.addEventListener('resize', resizeCanvas);
-      resizeCanvas();
-      loadState().catch(showError);
-      loadNoise().catch(showError);
+      try {
+        await refreshState();
+        await Promise.all([refreshMeta(), loadRules(), loadBoard(), loadNoise()]);
+        setStatus('En pause', 'idle');
+        resize();
+        animate();
+        boot.classList.add('fade');
+        setTimeout(() => { boot.hidden = true; }, 420);
+      } catch (error) {
+        fatal(
+          `Le serveur ne répond pas (<code>${error.message}</code>).<br />` +
+          'Lancez <code>uvicorn viz.server:app --reload --workers 1</code> puis rechargez.'
+        );
+      }
     </script>
   </body>
 </html>

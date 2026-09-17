@@ -6,7 +6,7 @@ from itertools import product
 from typing import Iterable
 
 import numpy as np
-from scipy.ndimage import convolve
+from scipy.ndimage import convolve1d
 
 from engine.rules import RuleSet
 
@@ -24,8 +24,7 @@ class NDimLifeEngine:
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.ndim = len(config.shape)
-        self._kernel = np.ones((3,) * self.ndim, dtype=np.int8)
-        self._kernel[(1,) * self.ndim] = 0
+        self._ones = np.ones(3, dtype=np.int16)
         self._neighbor_offsets = [
             offset
             for offset in product((-1, 0, 1), repeat=self.ndim)
@@ -50,7 +49,7 @@ class NDimLifeEngine:
         if grid.ndim != self.ndim:
             raise ValueError(f"Expected {self.ndim} dimensions, got {grid.ndim}")
 
-        neighbors = convolve(grid.astype(np.int16), self._kernel, mode="constant", cval=0)
+        neighbors = self.count_neighbors_dense(grid)
         birth_mask = np.isin(neighbors, tuple(self.config.rules.birth)) & (grid == 0)
         survive_mask = np.isin(neighbors, tuple(self.config.rules.survive)) & (grid == 1)
         next_grid = np.zeros_like(grid, dtype=np.uint8)
@@ -77,7 +76,13 @@ class NDimLifeEngine:
         return next_cells
 
     def count_neighbors_dense(self, grid: np.ndarray) -> np.ndarray:
-        return convolve(grid.astype(np.int16), self._kernel, mode="constant", cval=0)
+        # Le noyau 3^n rempli de 1 est séparable : n convolutions 1D valent la
+        # convolution n-D, soit 3n opérations par cellule au lieu de 3^n
+        # (27 -> 9 en 3D). Résultat strictement identique.
+        total = grid.astype(np.int16)
+        for axis in range(self.ndim):
+            total = convolve1d(total, self._ones, axis=axis, mode="constant", cval=0)
+        return total - grid  # la boîte compte le centre, pas le voisinage
 
     def run_dense(self, grid: np.ndarray, generations: int) -> list[np.ndarray]:
         states = [grid.astype(np.uint8)]
