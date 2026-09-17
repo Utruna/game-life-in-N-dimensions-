@@ -58,3 +58,46 @@ def test_sparse_and_dense_step_consistency() -> None:
     sparse_next = engine.step_sparse(coords)
 
     assert engine.sparse_from_dense(dense_next) == sparse_next
+
+
+def test_step_auto_on_dense_matches_dense_backend() -> None:
+    coords = {(1, 1, 1), (1, 1, 2), (1, 2, 1), (2, 1, 1)}
+    auto_engine = NDimLifeEngine(
+        SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B3/S2,3"), backend="auto")
+    )
+    grid = auto_engine.dense_from_coords(coords)
+
+    auto_next = auto_engine.step(grid)
+    auto_next_dense = auto_next if isinstance(auto_next, np.ndarray) else auto_engine.dense_from_coords(auto_next)
+    assert np.array_equal(auto_next_dense, auto_engine.step_dense(grid))
+
+
+def test_step_forced_dense_returns_dense() -> None:
+    coords = {(1, 1, 1), (1, 1, 2), (1, 2, 1), (2, 1, 1)}
+    engine = NDimLifeEngine(
+        SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B3/S2,3"), backend="dense")
+    )
+    dense = engine.dense_from_coords(coords)
+
+    dense_next = engine.step(dense)
+    assert isinstance(dense_next, np.ndarray)
+    assert np.array_equal(dense_next, engine.step_dense(dense))
+
+
+def test_step_auto_on_sparse_matches_sparse_backend() -> None:
+    coords = {(1, 1, 1), (1, 1, 2), (1, 2, 1), (2, 1, 1)}
+    auto_engine = NDimLifeEngine(
+        SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B3/S2,3"), backend="auto")
+    )
+
+    assert auto_engine.step(coords) == auto_engine.step_sparse(coords)
+
+
+def test_step_forced_sparse_converts_dense_input() -> None:
+    coords = {(1, 1, 1), (1, 1, 2), (1, 2, 1), (2, 1, 1)}
+    engine = NDimLifeEngine(
+        SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B3/S2,3"), backend="sparse")
+    )
+    dense = engine.dense_from_coords(coords)
+
+    assert engine.step(dense) == engine.step_sparse(coords)

@@ -11,6 +11,8 @@ import numpy as np
 from engine import NDimLifeEngine, SimulationConfig
 from rules import get_rule
 
+State = np.ndarray | set[tuple[int, ...]]
+
 
 def parse_shape(raw: str) -> tuple[int, ...]:
     values = tuple(int(part.strip()) for part in raw.split(",") if part.strip())
@@ -24,6 +26,26 @@ def parse_shape(raw: str) -> tuple[int, ...]:
 def init_random_dense(shape: tuple[int, ...], density: float, seed: int | None) -> np.ndarray:
     rng = np.random.default_rng(seed)
     return (rng.random(shape) < density).astype(np.uint8)
+
+
+def to_dense_state(engine: NDimLifeEngine, state: State) -> np.ndarray:
+    if isinstance(state, np.ndarray):
+        return state.astype(np.uint8)
+    return engine.dense_from_coords(state)
+
+
+def run_simulation(engine: NDimLifeEngine, initial_dense: np.ndarray, generations: int) -> list[np.ndarray]:
+    state: State
+    if engine.config.backend == "sparse":
+        state = engine.sparse_from_dense(initial_dense)
+    else:
+        state = initial_dense
+
+    dense_states: list[np.ndarray] = [initial_dense.astype(np.uint8)]
+    for _ in range(generations):
+        state = engine.step(state)
+        dense_states.append(to_dense_state(engine, state))
+    return dense_states
 
 
 def states_to_json_serializable(states: Iterable[np.ndarray]) -> list[list[list[int]]]:
@@ -50,7 +72,7 @@ def run() -> int:
     engine = NDimLifeEngine(config)
 
     initial = init_random_dense(shape, args.density, args.seed)
-    states = engine.run_dense(initial, args.generations)
+    states = run_simulation(engine, initial, args.generations)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "json":

@@ -9,6 +9,12 @@ def test_parse_rule_with_commas() -> None:
     assert rule.survive == {6, 7, 8}
 
 
+def test_parse_rule_with_multidigit_values() -> None:
+    rule = RuleSet.from_spec("B18,19,20/S18,19,20,21")
+    assert rule.birth == {18, 19, 20}
+    assert rule.survive == {18, 19, 20, 21}
+
+
 def test_parse_rule_without_commas() -> None:
     rule = RuleSet.from_spec("B3/S23")
     assert rule.birth == {3}
