@@ -35,8 +35,10 @@ def _parse_numbers(raw: str) -> set[int]:
 
     if "," in raw:
         parts = raw.split(",")
+    elif len(raw) == 1:
+        parts = [raw]
     else:
-        parts = list(raw)
+        raise ValueError("Use comma-separated neighbor counts for multi-value rules")
 
     numbers: set[int] = set()
     for item in parts:

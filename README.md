@@ -17,8 +17,8 @@ Le format suit `B.../S...` :
 - `S` (survive) : nombres de voisins qui maintiennent une cellule vivante
 
 Exemples :
-- `B3/S23` (notation compacte classique)
-- `B5,6,7/S6,7,8` (notation recommandée au-delà de 9 voisins)
+- `B3/S2,3`
+- `B5,6,7/S6,7,8`
 
 ## 3D vs 4D
 
@@ -85,5 +85,5 @@ Pour la 4D, l'API accepte un index de tranche (`w`) pour visualiser une coupe 3D
 Démarrage :
 
 ```bash
-uvicorn viz.server:app --reload
+uvicorn viz.server:app --reload --workers 1
 ```

@@ -27,6 +27,9 @@ SHAPE = _parse_shape(os.getenv("VIZ_SHAPE", "20,20,20"))
 RULE_SPEC = os.getenv("VIZ_RULE", "life_3d_bays")
 DENSITY = float(os.getenv("VIZ_DENSITY", "0.1"))
 SEED = int(os.getenv("VIZ_SEED", "0"))
+WORKERS = int(os.getenv("WEB_CONCURRENCY", os.getenv("VIZ_WORKERS", "1")))
+if WORKERS != 1:
+    raise RuntimeError("Le serveur viz en mémoire doit être lancé avec un seul worker")
 
 CONFIG = SimulationConfig(shape=SHAPE, rules=get_rule(RULE_SPEC), backend="dense")
 ENGINE = NDimLifeEngine(CONFIG)

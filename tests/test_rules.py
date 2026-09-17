@@ -15,18 +15,9 @@ def test_parse_rule_with_multidigit_values() -> None:
     assert rule.survive == {18, 19, 20, 21}
 
 
-def test_parse_rule_without_commas() -> None:
-    rule = RuleSet.from_spec("B3/S23")
-    assert rule.birth == {3}
-    assert rule.survive == {2, 3}
-
-
-
-def test_compact_digits_are_parsed_digit_by_digit() -> None:
-    rule = RuleSet.from_spec("B12/S34")
-    assert rule.birth == {1, 2}
-    assert rule.survive == {3, 4}
-    assert rule.spec == "B1,2/S3,4"
+def test_compact_multi_value_notation_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        RuleSet.from_spec("B12/S34")
 
 
 def test_invalid_rule_raises() -> None:

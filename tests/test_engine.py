@@ -4,7 +4,7 @@ from engine import NDimLifeEngine, RuleSet, SimulationConfig
 
 
 def test_neighbor_count_center_3d_is_26() -> None:
-    config = SimulationConfig(shape=(3, 3, 3), rules=RuleSet.from_spec("B6/S567"))
+    config = SimulationConfig(shape=(3, 3, 3), rules=RuleSet.from_spec("B6/S5,6,7"))
     engine = NDimLifeEngine(config)
     grid = np.ones((3, 3, 3), dtype=np.uint8)
     counts = engine.count_neighbors_dense(grid)
@@ -33,7 +33,7 @@ def test_rules_birth_and_survival_applied() -> None:
 
 
 def test_empty_grid_stays_empty() -> None:
-    config = SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B6/S567"))
+    config = SimulationConfig(shape=(5, 5, 5), rules=RuleSet.from_spec("B6/S5,6,7"))
     engine = NDimLifeEngine(config)
     grid = np.zeros((5, 5, 5), dtype=np.uint8)
     next_grid = engine.step_dense(grid)
