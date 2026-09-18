@@ -38,6 +38,16 @@ MAX_NEIGHBORS = 3 ** len(SHAPE) - 1
 # "vivant" en continu.
 RULE_SPEC = os.getenv("VIZ_RULE", "life_3d_highlife")
 DENSITY = float(os.getenv("VIZ_DENSITY", "0.1"))
+
+# Changer de dimension sans changer de règle n'a pas de sens : les seuils de
+# HighLife 3D (5 à 8 voisins) face aux 80 voisins d'une grille 4D donnent une
+# grille qui meurt au premier pas. Chaque dimension a donc sa règle par défaut,
+# appliquée automatiquement quand on bascule, sauf choix explicite de l'UI.
+DEFAULT_RULE_BY_DIM = {3: "life_3d_highlife", 4: "life_4d_chaos"}
+# 160³ tient (4,1 M cases) ; 160⁴ ferait 655 millions de cases. La 4ᵉ dimension
+# s'achète en résolution : 48⁴ = 5,3 M cases, soit déjà plus qu'un 160³.
+GRID_MAX_BY_DIM = {3: 160, 4: 48}
+SUPPORTED_DIMS = (3, 4)
 WORKERS = int(os.getenv("WEB_CONCURRENCY", os.getenv("VIZ_WORKERS", "1")))
 if WORKERS != 1:
     raise RuntimeError("Le serveur viz en mémoire doit être lancé avec un seul worker")
@@ -98,19 +108,30 @@ def _board_mask() -> np.ndarray:
         raise ValueError("Les plateaux 'sphere'/'torus' nécessitent au moins 3 dimensions")
 
     coords = np.indices(SHAPE).astype(np.float64)
-    dx, dy, dz = (coords[axis] - centers[axis] for axis in range(3))
-
-    if BOARD_SHAPE == "sphere":
-        mask3 = dx**2 + dy**2 + dz**2 <= BOARD_SIZE**2
-    else:  # torus
-        tube_radius = BOARD_MINOR / 2
-        planar = np.sqrt(dx**2 + dy**2)
-        mask3 = (planar - BOARD_SIZE) ** 2 + dz**2 <= tube_radius**2
+    delta = [coords[axis] - centers[axis] for axis in range(ndim)]
+    tube_radius = BOARD_MINOR / 2
 
     if ndim == 3:
-        return mask3
-    expanded = mask3[(...,) + (np.newaxis,) * (ndim - 3)]
-    return np.broadcast_to(expanded, SHAPE)
+        dx, dy, dz = delta
+        if BOARD_SHAPE == "sphere":
+            return dx**2 + dy**2 + dz**2 <= BOARD_SIZE**2
+        planar = np.sqrt(dx**2 + dy**2)
+        return (planar - BOARD_SIZE) ** 2 + dz**2 <= tube_radius**2
+
+    # En 4D on ne prolonge pas la forme 3D le long de w (ça donnerait un
+    # hypercylindre, dont toutes les tranches en w sont identiques : la 4ᵉ
+    # dimension n'apporterait alors rien à regarder). On prend les vrais
+    # analogues 4D, dont les tranches en w évoluent.
+    dx, dy, dz, dw = delta[:4]
+    if BOARD_SHAPE == "sphere":
+        # Hypersphère : ses tranches en w sont des sphères 3D qui enflent puis
+        # se résorbent quand on traverse w.
+        return dx**2 + dy**2 + dz**2 + dw**2 <= BOARD_SIZE**2
+    # Tore de Clifford : deux rotations indépendantes dans les plans (x,y) et
+    # (z,w), la seule surface qui soit « également tore » dans les deux.
+    first = np.sqrt(dx**2 + dy**2) - BOARD_SIZE
+    second = np.sqrt(dz**2 + dw**2) - BOARD_SIZE
+    return first**2 + second**2 <= tube_radius**2
 
 
 def _new_state() -> np.ndarray:
@@ -151,16 +172,37 @@ GRID_MIN, GRID_MAX = 8, 160
 # et le poids ne dépend plus que du volume, pas du nombre de cellules vivantes.
 STATE_MAGIC = 0x4C494645  # 'LIFE'
 STATE_VERSION = 1
-STATE_HEADER = "<IIHHHHIIII"  # magic, version, sx, sy, sz, _, génération, vivantes, octets_masque, renouvellement
+# Le 4ᵉ champ court, resté libre en 3D, porte maintenant sw : la 4ᵉ dimension
+# passe sans changer ni la taille ni la version de l'en-tête, et un flux 3D
+# reste octet pour octet ce qu'il était (sw = 0 signifie « grille 3D »).
+STATE_HEADER = "<IIHHHHIIII"  # magic, version, sx, sy, sz, sw, génération, vivantes, octets_utiles, renouvellement
 
 
-def _apply_grid_locked(size: int) -> None:
-    """Redimensionne la grille (cubique). L'appelant doit détenir STATE_LOCK
-    et appeler _reseed_locked() ensuite."""
-    global SHAPE, MAX_NEIGHBORS, CONFIG, ENGINE
-    SHAPE = (size,) * 3
+def _pack_header(live_count: int, payload_bytes: int) -> bytes:
+    sx, sy, sz = SHAPE[0], SHAPE[1], SHAPE[2]
+    sw = SHAPE[3] if len(SHAPE) > 3 else 0
+    return struct.pack(
+        STATE_HEADER,
+        STATE_MAGIC, STATE_VERSION,
+        sx, sy, sz, sw,
+        GENERATION, int(live_count), int(payload_bytes), CHURN,
+    )
+
+
+def _apply_grid_locked(size: int, ndim: int | None = None) -> None:
+    """Redimensionne la grille (hypercubique). L'appelant doit détenir
+    STATE_LOCK et appeler _reseed_locked() ensuite."""
+    global SHAPE, MAX_NEIGHBORS, CONFIG, ENGINE, RULE_SPEC
+    ndim = len(SHAPE) if ndim is None else ndim
+    rules = CONFIG.rules
+    if ndim != len(SHAPE):
+        # La règle courante est calibrée pour l'ancien voisinage ; la garder en
+        # changeant de dimension donne une grille morte au premier pas.
+        RULE_SPEC = DEFAULT_RULE_BY_DIM[ndim]
+        rules = get_rule(RULE_SPEC)
+    SHAPE = (size,) * ndim
     MAX_NEIGHBORS = 3 ** len(SHAPE) - 1
-    CONFIG = SimulationConfig(shape=SHAPE, rules=CONFIG.rules, backend="dense")
+    CONFIG = SimulationConfig(shape=SHAPE, rules=rules, backend="dense")
     ENGINE = NDimLifeEngine(CONFIG)
 
 
@@ -173,15 +215,22 @@ def _board_hint() -> str | None:
     seed : on dit pourquoi, et quelle taille de grille il faudrait."""
     if _board_capacity() > 0:
         return None
+    exponent = "³" if len(SHAPE) == 3 else "⁴"
     if BOARD_SHAPE == "torus":
         needed = math.ceil(2 * (BOARD_SIZE + BOARD_MINOR / 2) + 1)
         reach = math.hypot((SHAPE[0] - 1) / 2, (SHAPE[1] - 1) / 2)
-        return (
-            f"Ce tore est hors de la grille {SHAPE[0]}³ : l'anneau commence à "
-            f"{BOARD_SIZE - BOARD_MINOR / 2:.1f} du centre alors que la grille ne porte que "
-            f"jusqu'à {reach:.1f}. Il faut une grille d'au moins {needed}³."
+        ceiling = GRID_MAX_BY_DIM[len(SHAPE)]
+        note = (
+            ""
+            if needed <= ceiling
+            else f" Or une grille {len(SHAPE)}D est plafonnée à {ceiling} : réduisez plutôt le tore."
         )
-    return f"Ce plateau ne contient aucune cellule dans une grille {SHAPE[0]}³."
+        return (
+            f"Ce tore est hors de la grille {SHAPE[0]}{exponent} : l'anneau commence à "
+            f"{BOARD_SIZE - BOARD_MINOR / 2:.1f} du centre alors que la grille ne porte que "
+            f"jusqu'à {reach:.1f}. Il faut une grille d'au moins {needed}{exponent}.{note}"
+        )
+    return f"Ce plateau ne contient aucune cellule dans une grille {SHAPE[0]}{exponent}."
 
 
 _DIM_TAG = re.compile(r"_(\d+)d_")
@@ -246,8 +295,13 @@ def get_state(w: int = Query(default=0, ge=0)) -> dict[str, object]:
             "slice_axis": 3,
             "slice_index": slice_index,
             "slice_live_cells": np.argwhere(sliced > 0).tolist(),
-            "live_cells_4d": np.argwhere(snapshot > 0).tolist(),
+            # La grille 4D complète ne repasse pas en JSON : à 48⁴ la liste des
+            # cellules vivantes pèse des dizaines de Mo et des secondes de
+            # sérialisation. C'est /state/bin qui la porte.
+            "live_count": int((snapshot > 0).sum()),
             "seed": SEED,
+            "rule": CONFIG.rules.spec,
+            "rule_name": RULE_SPEC,
             "generation": generation,
         }
 
@@ -291,39 +345,66 @@ def get_meta() -> dict[str, object]:
 
 
 @app.get("/state/vol")
-def get_state_volume() -> Response:
-    """Volume dense, un octet par case, prêt à être poussé tel quel dans une
-    texture 3D : 0 = morte, 1..255 = âge+1. Plus lourd que le masque de bits,
-    mais le client n'a plus rien à décoder — c'est une simple recopie vers le GPU."""
-    if len(SHAPE) != 3:
-        raise HTTPException(status_code=409, detail="Le flux volumétrique attend une grille 3D")
+def get_state_volume(w: int = Query(default=-1)) -> Response:
+    """Volume dense 3D, un octet par case, prêt à être poussé tel quel dans une
+    texture 3D. Le client n'a rien à décoder — c'est une recopie vers le GPU.
+
+    En 3D : 0 = morte, 1..255 = âge+1.
+    En 4D il faut bien ramener quatre dimensions à trois, et l'en-tête annonce
+    donc toujours une grille 3D :
+      * w >= 0 : la tranche w, avec la même convention d'âge qu'en 3D ;
+      * w < 0  : la projection, où l'octet compte les cases vivantes le long de
+        w. Ce n'est plus un âge mais une épaisseur : chaque voxel dit combien de
+        la 4ᵉ dimension est occupée au-dessus de lui, ce que le raymarcher rend
+        comme une densité. Le client sait ce qu'il a demandé et choisit la
+        rampe correspondante.
+    """
     with STATE_LOCK:
-        alive = STATE > 0
-        volume = np.where(alive, np.minimum(AGES, 254) + 1, 0).astype(np.uint8)
-        header = struct.pack(
-            STATE_HEADER,
-            STATE_MAGIC, STATE_VERSION,
-            SHAPE[0], SHAPE[1], SHAPE[2], 0,
-            GENERATION, int(alive.sum()), int(volume.size), CHURN,
-        )
+        if len(SHAPE) == 3:
+            alive = STATE > 0
+            volume = np.where(alive, np.minimum(AGES, 254) + 1, 0).astype(np.uint8)
+            live_count = int(alive.sum())
+            header = _pack_header(live_count, volume.size)
+        elif len(SHAPE) == 4:
+            live_count = int((STATE > 0).sum())
+            if w >= 0:
+                index = min(w, SHAPE[3] - 1)
+                sliced, sliced_ages = STATE[..., index], AGES[..., index]
+                volume = np.where(
+                    sliced > 0, np.minimum(sliced_ages, 254) + 1, 0
+                ).astype(np.uint8)
+            else:
+                volume = np.minimum((STATE > 0).sum(axis=3), 255).astype(np.uint8)
+            # L'en-tête décrit le volume transmis, pas la grille : le client
+            # reçoit bien un 3D à charger dans la texture.
+            header = struct.pack(
+                STATE_HEADER,
+                STATE_MAGIC, STATE_VERSION,
+                SHAPE[0], SHAPE[1], SHAPE[2], 0,
+                GENERATION, live_count, int(volume.size), CHURN,
+            )
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail="Le flux volumétrique attend une grille 3D ou 4D",
+            )
     return Response(content=header + volume.tobytes(),
                     media_type="application/octet-stream")
 
 
 @app.get("/state/bin")
 def get_state_binary() -> Response:
-    if len(SHAPE) != 3:
-        raise HTTPException(status_code=409, detail="Le flux binaire attend une grille 3D")
+    """Masque de bits + âges, en ordre C. Indépendant du nombre de dimensions :
+    l'en-tête porte la forme, et le client en déduit le découpage des indices."""
+    if len(SHAPE) not in SUPPORTED_DIMS:
+        raise HTTPException(
+            status_code=409, detail="Le flux binaire attend une grille 3D ou 4D"
+        )
     with STATE_LOCK:
         alive = STATE > 0
         mask = np.packbits(alive)  # aplati en ordre C, bit de poids fort en tête
         ages = np.minimum(AGES[alive], 255).astype(np.uint8)
-        header = struct.pack(
-            STATE_HEADER,
-            STATE_MAGIC, STATE_VERSION,
-            SHAPE[0], SHAPE[1], SHAPE[2], 0,
-            GENERATION, int(ages.size), int(mask.size), CHURN,
-        )
+        header = _pack_header(ages.size, mask.size)
     return Response(content=header + mask.tobytes() + ages.tobytes(),
                     media_type="application/octet-stream")
 
@@ -368,7 +449,10 @@ def get_board() -> dict[str, object]:
         "shapes": sorted(BOARD_SHAPES),
         "grid": SHAPE[0],
         "grid_min": GRID_MIN,
-        "grid_max": GRID_MAX,
+        "grid_max": GRID_MAX_BY_DIM[len(SHAPE)],
+        "dim": len(SHAPE),
+        "dims": list(SUPPORTED_DIMS),
+        "grid_max_by_dim": GRID_MAX_BY_DIM,
         "capacity": _board_capacity(),
         "hint": _board_hint(),
     }
@@ -381,15 +465,32 @@ def set_board(
     minor: float | None = Query(default=None, gt=0),
     density: float | None = Query(default=None, gt=0.0, le=1.0),
     grid: int | None = Query(default=None, ge=GRID_MIN, le=GRID_MAX),
+    dim: int | None = Query(default=None),
 ) -> dict[str, object]:
     global BOARD_SHAPE, BOARD_SIZE, BOARD_MINOR, DENSITY
     if shape not in BOARD_SHAPES:
         raise HTTPException(status_code=400, detail=f"shape doit être l'un de {sorted(BOARD_SHAPES)}")
+    if dim is not None and dim not in SUPPORTED_DIMS:
+        raise HTTPException(status_code=400, detail=f"dim doit être l'un de {list(SUPPORTED_DIMS)}")
+    target_dim = len(SHAPE) if dim is None else dim
+    target_grid = SHAPE[0] if grid is None else grid
+    # Le plafond dépend de la dimension : ce qui passe en 3D fait exploser la
+    # mémoire en 4D (160⁴ = 655 M de cases), donc on refuse explicitement au
+    # lieu de laisser l'allocation échouer.
+    ceiling = GRID_MAX_BY_DIM[target_dim]
+    if target_grid > ceiling:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Une grille {target_dim}D est limitée à {ceiling} de côté "
+                f"({ceiling ** target_dim:,} cases) ; {target_grid} demandé."
+            ),
+        )
     with STATE_LOCK:
         # Grille et plateau changent ensemble : sinon, agrandir un tore avant
         # d'agrandir la grille donne un état vide intermédiaire.
-        if grid is not None and grid != SHAPE[0]:
-            _apply_grid_locked(grid)
+        if target_grid != SHAPE[0] or target_dim != len(SHAPE):
+            _apply_grid_locked(target_grid, target_dim)
         BOARD_SHAPE = shape
         BOARD_SIZE = size
         if minor is not None:
@@ -405,6 +506,12 @@ def set_board(
         "minor": BOARD_MINOR,
         "density": DENSITY,
         "grid": SHAPE[0],
+        "dim": len(SHAPE),
+        "grid_max": GRID_MAX_BY_DIM[len(SHAPE)],
+        # Changer de dimension change la règle d'office : le client doit le
+        # savoir pour ne pas afficher l'ancienne.
+        "rule_name": RULE_SPEC,
+        "rule": CONFIG.rules.spec,
         "capacity": capacity,
         "hint": hint,
         "seed": SEED,

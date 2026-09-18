@@ -444,6 +444,27 @@
         padding-left: 9px;
       }
 
+      /* ---------- legende de la 4e dimension ---------- */
+      /* La couleur porte ici une information (la position en w, ou l'epaisseur) :
+         sans echelle lisible, le rendu 4D n'est qu'un nuage colore. */
+      .legend { display: grid; gap: 5px; }
+
+      .legend-title { font-size: 11.5px; color: var(--muted); }
+
+      .legend-ramp {
+        height: 9px;
+        border-radius: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+      }
+
+      .legend-scale {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
       /* ---------- stats ---------- */
 
       .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
@@ -556,6 +577,10 @@
           <details class="section" open>
             <summary>Plateau</summary>
             <div class="section-body">
+              <div class="segmented" id="boardDim" role="radiogroup" aria-label="Dimension">
+                <button type="button" role="radio" data-dim="3" aria-checked="true">3D</button>
+                <button type="button" role="radio" data-dim="4" aria-checked="false">4D</button>
+              </div>
               <div class="field">
                 <div class="field-label">
                   <label for="gridSize">Taille de la grille</label>
@@ -563,6 +588,7 @@
                 </div>
                 <input type="range" id="gridSize" min="8" max="160" step="1" value="20" />
               </div>
+              <p class="note" id="dimNote" hidden></p>
               <div class="segmented" id="boardShape" role="radiogroup" aria-label="Forme du plateau">
                 <button type="button" role="radio" data-shape="cube" aria-checked="true">Cube</button>
                 <button type="button" role="radio" data-shape="sphere" aria-checked="false">Sphère</button>
@@ -587,6 +613,72 @@
               </div>
               <button id="btnBoard" class="btn-primary">Appliquer le plateau</button>
               <p class="note note-warn" id="boardHint" hidden></p>
+            </div>
+          </details>
+
+          <details class="section" id="section4d" open hidden>
+            <summary>Quatrième dimension</summary>
+            <div class="section-body">
+              <div class="field">
+                <div class="field-label"><label for="view4d">Représentation</label></div>
+                <select id="view4d">
+                  <option value="project">Projection 4D → 3D</option>
+                  <option value="slice">Tranche en w</option>
+                  <option value="thickness">Épaisseur en w</option>
+                </select>
+                <p class="note" id="view4dNote"></p>
+              </div>
+
+              <div class="field" id="sliceField" hidden>
+                <div class="field-label">
+                  <label for="wSlice">Tranche w</label>
+                  <span class="field-value" id="wSliceValue">0</span>
+                </div>
+                <input type="range" id="wSlice" min="0" max="19" step="1" value="0" />
+                <label class="switch">
+                  <input type="checkbox" id="optSliceSweep" />
+                  <span class="track"><span class="thumb"></span></span>
+                  <span>Balayer w automatiquement</span>
+                </label>
+              </div>
+
+              <div id="projectFields">
+                <div class="field">
+                  <div class="field-label">
+                    <label for="rotXW">Rotation X–W</label>
+                    <span class="field-value" id="rotXWValue">0°</span>
+                  </div>
+                  <input type="range" id="rotXW" min="0" max="360" step="1" value="0" />
+                </div>
+                <div class="field">
+                  <div class="field-label">
+                    <label for="rotYW">Rotation Y–W</label>
+                    <span class="field-value" id="rotYWValue">0°</span>
+                  </div>
+                  <input type="range" id="rotYW" min="0" max="360" step="1" value="0" />
+                </div>
+                <div class="field">
+                  <div class="field-label">
+                    <label for="rotZW">Rotation Z–W</label>
+                    <span class="field-value" id="rotZWValue">0°</span>
+                  </div>
+                  <input type="range" id="rotZW" min="0" max="360" step="1" value="0" />
+                </div>
+                <div class="field">
+                  <div class="field-label">
+                    <label for="depth4d">Recul en w</label>
+                    <span class="field-value" id="depth4dValue">2.20</span>
+                  </div>
+                  <input type="range" id="depth4d" min="1.15" max="6" step="0.05" value="2.2" />
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="optSpin4d" checked />
+                  <span class="track"><span class="thumb"></span></span>
+                  <span>Rotation 4D continue</span>
+                </label>
+              </div>
+
+              <div class="legend" id="legend4d"></div>
             </div>
           </details>
 
@@ -701,6 +793,10 @@
                   <div class="tile-label">Renouvellement</div>
                   <div class="tile-value" id="statChurn">—</div>
                 </div>
+                <div class="tile" id="drawnTile" hidden>
+                  <div class="tile-label">Cubes affichés</div>
+                  <div class="tile-value" id="statDrawn">—</div>
+                </div>
               </div>
               <div class="spark-wrap">
                 <div class="spark-head">
@@ -800,6 +896,150 @@
         texture.minFilter = texture.magFilter = THREE.NearestFilter;
         texture.needsUpdate = true;
         return texture;
+      }
+
+      // ------------------------------------------------------------------
+      // 4D : rampes, projection
+      // ------------------------------------------------------------------
+
+      // En projection, la couleur ne code plus l'âge mais la position en w.
+      // C'est une grandeur signée autour du centre de l'hypercube, donc une
+      // rampe divergente : deux teintes opposées et un point neutre au milieu,
+      // là où la tranche coïncide avec notre espace 3D. Une rampe séquentielle
+      // laisserait croire que w « augmente » alors qu'il s'éloigne des deux côtés.
+      // Calee bien plus bas que la rampe d'age : celle-ci sert une scene 3D
+      // clairsemee, alors qu'une projection 4D empile toutes les couches de w
+      // dans le meme cadre. Aux memes valeurs HDR, le halo sature et les deux
+      // extremites virent au blanc. Les deux bras sont equilibres en clarte,
+      // sinon le bras sombre disparait sous le halo de l'autre.
+      const W_STOPS = [
+        [0.00, 0.10, 0.44, 0.88],
+        [0.25, 0.14, 0.66, 0.78],
+        [0.50, 0.80, 0.78, 0.74],
+        [0.75, 0.90, 0.44, 0.17],
+        [1.00, 0.82, 0.20, 0.14],
+      ];
+
+      // L'épaisseur est une magnitude : une seule teinte, du sourd au vif. Sur
+      // fond noir la lecture va du sombre au clair, l'inverse d'une rampe papier.
+      const THICKNESS_STOPS = [
+        [0.00, 0.22, 0.12, 0.10],
+        [0.35, 0.72, 0.30, 0.16],
+        [0.70, 1.25, 0.72, 0.28],
+        [1.00, 2.05, 1.55, 0.90],
+      ];
+
+      function sampleStops(stops, t, out) {
+        const clamped = Math.min(1, Math.max(0, t));
+        let i = 0;
+        while (i < stops.length - 1 && clamped >= stops[i + 1][0]) i++;
+        const a = stops[i];
+        if (i === stops.length - 1) return out.setRGB(a[1], a[2], a[3]);
+        const b = stops[i + 1];
+        const k = (clamped - a[0]) / (b[0] - a[0]);
+        return out.setRGB(a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k);
+      }
+
+      // LUT pour le raymarcher : l'octet reçu est une épaisseur (0..span), pas
+      // un âge. Elle se reconstruit quand span change, sinon une grille 16⁴ et
+      // une grille 48⁴ afficheraient la même couleur pour des épaisseurs très
+      // différentes.
+      function buildThicknessRamp(span) {
+        const data = new Float32Array(256 * 4);
+        const color = new THREE.Color();
+        const last = Math.max(1, span);
+        for (let value = 1; value < 256; value++) {
+          sampleStops(THICKNESS_STOPS, (value - 1) / last, color);
+          data[value * 4] = color.r;
+          data[value * 4 + 1] = color.g;
+          data[value * 4 + 2] = color.b;
+          data[value * 4 + 3] = 1;
+        }
+        const texture = new THREE.DataTexture(data, 256, 1, THREE.RGBAFormat, THREE.FloatType);
+        texture.minFilter = texture.magFilter = THREE.NearestFilter;
+        texture.needsUpdate = true;
+        return texture;
+      }
+
+      const view4d = {
+        mode: 'project',
+        // null = « pas encore choisie » : elle est alors calee au centre de w.
+        // Commencer a 0 montrait le bord de la grille, qui est hors plateau et
+        // donc toujours vide : la tranche paraissait ne rien afficher.
+        slice: null,
+        rotXW: 0, rotYW: 0, rotZW: 0, // radians
+        depth: 2.2,
+        spin: true,
+        sweep: false,
+      };
+
+      // project4() tourne une fois par cellule vivante, jusqu'à ~1 M par image :
+      // tout ce qui ne dépend que de la pose est calculé ici, une fois.
+      const p4 = {
+        cx: 0, cy: 0, cz: 0, cw: 0, half: 1,
+        cxw: 1, sxw: 0, cyw: 1, syw: 0, czw: 1, szw: 0,
+        depth: 2.2, norm: 1,
+      };
+
+      function sync4dProjection(shape) {
+        const [sx, sy, sz, sw] = shape;
+        p4.cx = (sx - 1) / 2; p4.cy = (sy - 1) / 2;
+        p4.cz = (sz - 1) / 2; p4.cw = (sw - 1) / 2;
+        p4.half = Math.max(1e-6, p4.cw);
+        p4.cxw = Math.cos(view4d.rotXW); p4.sxw = Math.sin(view4d.rotXW);
+        p4.cyw = Math.cos(view4d.rotYW); p4.syw = Math.sin(view4d.rotYW);
+        p4.czw = Math.cos(view4d.rotZW); p4.szw = Math.sin(view4d.rotZW);
+        p4.depth = view4d.depth;
+        // Facteur de perspective de la cellule la plus proche en w. On divise
+        // par lui pour que la projection tienne dans le repère : sinon la forme
+        // déborde du cadre et le contour du plateau ne veut plus rien dire.
+        p4.norm = (p4.depth - 1) / p4.depth;
+      }
+
+      // Une cellule 4D projetée sur trois dimensions, exactement comme un
+      // tesseract se dessine sur une feuille : on tourne dans les plans qui
+      // contiennent w, puis on divise par la distance en w. Les cellules proches
+      // en w grossissent, les lointaines rétrécissent — c'est ce déséquilibre
+      // qui donne l'impression que la forme se traverse elle-même en tournant.
+      const proj = { x: 0, y: 0, z: 0, scale: 1, depth: 0 };
+
+      // Fraction du volume que les cubes doivent occuper pour rester
+      // traversables. Au-dela, on ne voit plus qu'une croute opaque.
+      const PROJECT_TARGET_FILL = 0.16;
+
+      // Meme raisonnement que l'opacite du rendu volumetrique : ce qu'on
+      // dessine doit s'alleger quand le nombre de cellules monte. En projection
+      // c'est vital, car les sw couches de w se superposent dans la meme boite :
+      // le remplissage apparent vaut plusieurs fois celui d'une grille 3D, et
+      // des cubes de taille 3D donnent un bloc plein. Pire, la perspective
+      // pousse les cellules proches en w vers l'exterieur : sans jour entre les
+      // cubes, on ne verrait jamais que l'extremite chaude de la rampe.
+      function projectionCellScale(drawn, shape) {
+        const voxels = shape[0] * shape[1] * shape[2];
+        const perVoxel = Math.max(1e-6, drawn / voxels);
+        // Le facteur de perspective vaut 0,7 en moyenne : on le compense ici
+        // pour que la cible porte sur la taille reellement dessinee.
+        return Math.min(0.72, Math.cbrt(PROJECT_TARGET_FILL / perVoxel) / 0.7);
+      }
+
+      function project4(x, y, z, w) {
+        let u = x - p4.cx, v = y - p4.cy, t = z - p4.cz, q = w - p4.cw;
+
+        let n = u * p4.cxw - q * p4.sxw; q = u * p4.sxw + q * p4.cxw; u = n;
+        n = v * p4.cyw - q * p4.syw; q = v * p4.syw + q * p4.cyw; v = n;
+        n = t * p4.czw - q * p4.szw; q = t * p4.szw + q * p4.czw; t = n;
+
+        // Les rotations peuvent pousser q au-delà du demi-côté ; sans borne, le
+        // dénominateur passerait par zéro et la forme se retournerait.
+        const qn = Math.max(-1, Math.min(1, q / p4.half));
+        const k = (p4.depth / (p4.depth - qn)) * p4.norm;
+
+        proj.x = p4.cx + u * k;
+        proj.y = p4.cy + v * k;
+        proj.z = p4.cz + t * k;
+        proj.scale = k;
+        proj.depth = (qn + 1) / 2; // 0..1, pour la rampe divergente
+        return proj;
       }
 
       const VOLUME_VERTEX = `
@@ -923,9 +1163,13 @@
       let ghostMesh = null;
       let frameGroup = null;
       let boardMesh = null;
+      // Deux materiaux pour les memes cubes : voir syncCellMaterial().
+      let cellMaterials = null;
       let volumeMesh = null;
       let volumeTexture = null;
       let rampTexture = null;
+      let thicknessTexture = null;
+      let thicknessSpan = 0;
 
       // Basculer sur la taille de grille était une erreur : une grille 160³ avec
       // un tore creux n'a que quelques milliers de cellules, que les cubes
@@ -942,16 +1186,25 @@
       // sinon une grille creuse s'efface et une grille pleine devient un mur.
       const VOLUME_TARGET_ALPHA = 0.85;
 
+      // Fraction de voxels non vides du dernier volume reçu. En 3D elle se
+      // déduit de la population, mais en épaisseur 4D la population compte des
+      // cellules réparties sur w alors que le volume rendu n'a que trois
+      // dimensions : le rapport dépasserait 1 et l'opacité serait fausse.
+      let volumeOccupancy = 0;
+
       function autoSampleAlpha() {
         if (!volumeMesh || !gridShape) return 0.1;
-        const volume = gridShape[0] * gridShape[1] * gridShape[2];
         const steps = volumeMesh.material.uniforms.uSteps.value;
-        const occupied = Math.max(1e-4, steps * (population / volume));
+        const occupied = Math.max(1e-4, steps * volumeOccupancy);
         const alpha = 1 - Math.pow(1 - VOLUME_TARGET_ALPHA, 1 / occupied);
         return Math.min(1, alpha * volumeGain);
       }
 
       function effectiveMode() {
+        // En 4D la représentation commande le rendu : projection et tranche
+        // sont des nuages de cubes, l'épaisseur est le seul volume que le
+        // raymarcher sache recevoir (une texture 3D ne prend pas quatre axes).
+        if (gridDim === 4) return view4d.mode === 'thickness' ? 'volume' : 'cubes';
         if (renderMode !== 'auto') return renderMode;
         return population > AUTO_VOLUME_FROM_CELLS ? 'volume' : 'cubes';
       }
@@ -972,6 +1225,7 @@
       function buildWorld(shape) {
         const [sx, sy, sz] = shape;
         gridShape = shape;
+        gridDim = shape.length;
 
         for (const child of [...world.children]) disposeObject(child);
         world.clear();
@@ -997,20 +1251,33 @@
       // dessiner suffisait à faire tomber le navigateur au changement de grille.
       function ensureCubes() {
         if (cellMesh || !gridShape) return;
-        const [sx, sy, sz] = gridShape;
-        capacity = Math.min(sx * sy * sz, MAX_INSTANCES);
+        const [sx, sy, sz, sw] = gridShape;
+        // En 4D la projection peut amener toutes les couches w à l'écran d'un
+        // coup : le plafond d'instances devient la vraie limite, pas le volume 3D.
+        capacity = Math.min(sx * sy * sz * (sw || 1), MAX_INSTANCES);
 
         // Cubes nettement plus petits que la maille : les interstices laissent
         // voir l'intérieur du volume, sinon une soupe à 30 % n'est qu'un bloc opaque.
+        // En 3D, l'eclairage est ce qui donne le relief aux cubes. En
+        // projection 4D, la couleur ne decrit plus une matiere mais une donnee
+        // (la position en w) : la multiplier par une lumiere d'intensite 2 la
+        // pousse au-dela du seuil de halo, tout vire au blanc et l'encodage est
+        // perdu. Un materiau non eclaire rend exactement la couleur demandee.
+        cellMaterials = {
+          lit: new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.06 }),
+          flat: new THREE.MeshBasicMaterial(),
+        };
+
         cellMesh = new THREE.InstancedMesh(
           new THREE.BoxGeometry(0.72, 0.72, 0.72),
-          new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.06 }),
+          cellMaterials.lit,
           capacity
         );
         cellMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         cellMesh.setColorAt(0, tmpColor.setRGB(1, 1, 1));
         cellMesh.frustumCulled = false;
         cellMesh.count = 0;
+        syncCellMaterial();
         world.add(cellMesh);
 
         ghostMesh = new THREE.InstancedMesh(
@@ -1034,7 +1301,21 @@
         const [sx, sy, sz] = gridShape;
         const maxSide = Math.max(sx, sy, sz);
 
-        if (!rampTexture) rampTexture = buildRampTexture();
+        // En épaisseur, l'octet reçu n'est pas un âge mais un nombre de couches :
+        // c'est une autre grandeur, donc une autre rampe, calée sur le nombre de
+        // couches que la grille comporte réellement.
+        const thickness = gridDim === 4 && view4d.mode === 'thickness';
+        if (thickness) {
+          const span = gridShape[3] || 1;
+          if (!thicknessTexture || thicknessSpan !== span) {
+            thicknessTexture?.dispose();
+            thicknessTexture = buildThicknessRamp(span);
+            thicknessSpan = span;
+          }
+        } else if (!rampTexture) {
+          rampTexture = buildRampTexture();
+        }
+        const ramp = thickness ? thicknessTexture : rampTexture;
         // Ordre C de numpy : z varie le plus vite, donc la largeur de la
         // texture est sz et la profondeur sx (le shader compense en .zyx).
         volumeTexture = new THREE.Data3DTexture(new Uint8Array(sx * sy * sz), sz, sy, sx);
@@ -1052,7 +1333,7 @@
             fragmentShader: VOLUME_FRAGMENT,
             uniforms: {
               uVolume: { value: volumeTexture },
-              uRamp: { value: rampTexture },
+              uRamp: { value: ramp },
               // Il faut au moins un pas par voxel le long de la diagonale
               // (maxSide × √3), sinon les structures fines d'une épaisseur d'une
               // cellule sont ratées une fois sur deux et le rendu part en flou.
@@ -1072,10 +1353,20 @@
         world.add(volumeMesh);
       }
 
+      function syncCellMaterial() {
+        if (!cellMesh || !cellMaterials) return;
+        const flat = gridDim === 4 && view4d.mode === 'project';
+        cellMesh.material = flat ? cellMaterials.flat : cellMaterials.lit;
+      }
+
       function disposeCubes() {
         if (!cellMesh) return;
         disposeObject(cellMesh);
         disposeObject(ghostMesh);
+        // disposeObject ne libere que le materiau attache : l'autre est a nous.
+        cellMaterials?.lit.dispose();
+        cellMaterials?.flat.dispose();
+        cellMaterials = null;
         cellMesh = ghostMesh = null;
         liveCells.clear();
         ghosts.length = 0;
@@ -1097,6 +1388,7 @@
         } else {
           disposeVolume();
           ensureCubes();
+          syncCellMaterial();
         }
       }
 
@@ -1165,7 +1457,28 @@
         // Peu de segments : un fil de fer trop dense accumule les lignes et
         // devient un mur opaque qui masque les cellules qu'il contient.
         let geometry;
-        if (board.shape === 'sphere') {
+        if (gridShape.length === 4) {
+          // Sous projection, le contour d'un plateau 4D n'est plus une surface
+          // 3D : le dessiner mentirait sur ce qu'on regarde. En tranche, en
+          // revanche, la section est exacte et vaut la peine d'être tracée.
+          if (view4d.mode !== 'slice') return;
+          const sw = gridShape[3];
+          const dw = Math.min(view4d.slice, sw - 1) - (sw - 1) / 2;
+          if (board.shape === 'sphere') {
+            // Section d'une hypersphère : une sphère qui enfle jusqu'au centre
+            // de w puis se résorbe. C'est précisément ce qui rend la 4ᵉ
+            // dimension perceptible en feuilletant les tranches.
+            const radius = Math.sqrt(Math.max(0, board.size * board.size - dw * dw));
+            if (radius < 0.5) return;
+            geometry = new THREE.SphereGeometry(radius, 16, 10);
+          } else if (board.shape === 'torus') {
+            // La section d'un tore de Clifford n'est pas un tore : rien de
+            // fidèle à tracer ici.
+            return;
+          } else {
+            geometry = new THREE.BoxGeometry(board.size, board.size, board.size);
+          }
+        } else if (board.shape === 'sphere') {
           geometry = new THREE.SphereGeometry(board.size, 16, 10);
         } else if (board.shape === 'torus') {
           geometry = new THREE.TorusGeometry(board.size, Math.max(0.1, board.minor / 2), 8, 22);
@@ -1222,6 +1535,10 @@
       let dirty = false;
       let animateUntil = 0;
       let richMode = true;
+      // En 4D, le nombre de cubes dessinés n'est plus la population : une
+      // tranche n'en montre qu'une fraction, et la projection peut écrêter.
+      let drawnCells = 0;
+      let gridDim = 3;
 
       const options = { ghosts: true, board: true, frame: true };
 
@@ -1232,9 +1549,14 @@
       function decodeState(buffer) {
         const view = new DataView(buffer);
         if (view.getUint32(0, true) !== 0x4c494645) throw new Error('flux binaire invalide');
+        // sw = 0 signifie « grille 3D » : un flux 3D se décode exactement comme
+        // avant l'ajout de la 4ᵉ dimension.
+        const sw = view.getUint16(14, true);
+        const shape = [view.getUint16(8, true), view.getUint16(10, true), view.getUint16(12, true)];
+        if (sw > 0) shape.push(sw);
         return {
           buffer,
-          shape: [view.getUint16(8, true), view.getUint16(10, true), view.getUint16(12, true)],
+          shape,
           generation: view.getUint32(16, true),
           liveCount: view.getUint32(20, true),
           payloadBytes: view.getUint32(24, true),
@@ -1272,7 +1594,10 @@
         const [, sy, sz] = decoded.shape;
         population = decoded.liveCount;
         lastChurn = decoded.churn;
-        richMode = decoded.liveCount <= ANIM_LIMIT;
+        // La 4D passe toujours par l'écriture directe : sous rotation continue
+        // chaque cellule change de place à chaque image, ce qui rend l'animation
+        // de naissance et la rémanence à la fois coûteuses et invisibles.
+        richMode = decoded.shape.length === 3 && decoded.liveCount <= ANIM_LIMIT;
         frame = decoded;
         dirty = true;
         animateUntil = now + BIRTH_MS;
@@ -1312,26 +1637,70 @@
       function writeDirect(decoded) {
         const matrices = cellMesh.instanceMatrix.array;
         const colors = cellMesh.instanceColor.array;
-        const [, sy, sz] = decoded.shape;
         let i = 0;
+
+        const put = (x, y, z, scale, color) => {
+          const m = i * 16;
+          matrices[m] = scale; matrices[m + 1] = 0; matrices[m + 2] = 0; matrices[m + 3] = 0;
+          matrices[m + 4] = 0; matrices[m + 5] = scale; matrices[m + 6] = 0; matrices[m + 7] = 0;
+          matrices[m + 8] = 0; matrices[m + 9] = 0; matrices[m + 10] = scale; matrices[m + 11] = 0;
+          matrices[m + 12] = x; matrices[m + 13] = y; matrices[m + 14] = z; matrices[m + 15] = 1;
+          const c = i * 3;
+          colors[c] = color.r; colors[c + 1] = color.g; colors[c + 2] = color.b;
+          i++;
+        };
+
+        if (decoded.shape.length === 4) {
+          // Projection et tranche ne sont que deux façons de ramener le même
+          // nuage 4D à trois dimensions : un seul parcours, deux traitements.
+          const [, sy, sz, sw] = decoded.shape;
+          const sliced = view4d.mode === 'slice';
+          const slice = Math.min(view4d.slice ?? Math.floor((sw - 1) / 2), sw - 1);
+          sync4dProjection(decoded.shape);
+          // La population de l'image precedente suffit : elle ne varie que de
+          // quelques pour cent d'une generation a l'autre, et cela evite un
+          // premier parcours rien que pour compter.
+          const base = sliced
+            ? 1
+            : projectionCellScale(drawnCells || decoded.liveCount, decoded.shape);
+          eachLive(decoded, (index, age) => {
+            if (i >= capacity) return;
+            // Ordre C : w varie le plus vite.
+            const w = index % sw;
+            if (sliced && w !== slice) return;
+            let rest = (index - w) / sw;
+            const z = rest % sz; rest = (rest - z) / sz;
+            const y = rest % sy;
+            const x = (rest - y) / sy;
+            if (sliced) {
+              // Une tranche est une grille 3D ordinaire : l'âge reprend son rôle.
+              ageColor(age, tmpColor);
+              put(x, y, z, 1, tmpColor);
+            } else {
+              const p = project4(x, y, z, w);
+              sampleStops(W_STOPS, p.depth, tmpColor);
+              put(p.x, p.y, p.z, p.scale * base, tmpColor);
+            }
+          });
+          cellMesh.count = i;
+          clipped = i >= capacity;
+          drawnCells = i;
+          return;
+        }
+
+        const [, sy, sz] = decoded.shape;
         eachLive(decoded, (index, age) => {
           if (i >= capacity) return;
           const z = index % sz;
           const rest = (index - z) / sz;
           const y = rest % sy;
           const x = (rest - y) / sy;
-          const m = i * 16;
-          matrices[m] = 1; matrices[m + 1] = 0; matrices[m + 2] = 0; matrices[m + 3] = 0;
-          matrices[m + 4] = 0; matrices[m + 5] = 1; matrices[m + 6] = 0; matrices[m + 7] = 0;
-          matrices[m + 8] = 0; matrices[m + 9] = 0; matrices[m + 10] = 1; matrices[m + 11] = 0;
-          matrices[m + 12] = x; matrices[m + 13] = y; matrices[m + 14] = z; matrices[m + 15] = 1;
           ageColor(age, tmpColor);
-          const c = i * 3;
-          colors[c] = tmpColor.r; colors[c + 1] = tmpColor.g; colors[c + 2] = tmpColor.b;
-          i++;
+          put(x, y, z, 1, tmpColor);
         });
         cellMesh.count = i;
         clipped = decoded.liveCount > capacity;
+        drawnCells = i;
       }
 
       function updateInstances(now) {
@@ -1360,6 +1729,10 @@
         }
         cellMesh.instanceMatrix.needsUpdate = true;
         if (cellMesh.instanceColor) cellMesh.instanceColor.needsUpdate = true;
+        // Le comptage se fait ici, au trace ; l'annoncer depuis refreshState
+        // affichait celui de la generation precedente (d'ou un « 2 cubes »
+        // persistant alors que la population etait deja tombee a zero).
+        if (gridDim === 4) syncDrawnTile();
 
         let g = 0;
         if (richMode && options.ghosts && ghosts.length) {
@@ -1392,9 +1765,52 @@
       const localCamera = new THREE.Vector3();
       const inverseModel = new THREE.Matrix4();
 
+      const TAU = Math.PI * 2;
+      let lastFrameTime = performance.now();
+      let lastSpinSync = 0;
+
+      // Rotation 4D continue. Deux plans tournent à des vitesses volontairement
+      // non proportionnelles : une rotation simple ramènerait la forme à son
+      // point de départ en boucle courte, alors qu'une rotation double ne se
+      // répète quasiment jamais — c'est elle qui donne le retournement où la
+      // forme se traverse elle-même.
+      function advance4dSpin(now) {
+        const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+        if (gridDim !== 4 || !view4d.spin || view4d.mode !== 'project') return false;
+        view4d.rotXW = (view4d.rotXW + dt * 0.33) % TAU;
+        view4d.rotZW = (view4d.rotZW + dt * 0.21) % TAU;
+        // Les curseurs suivent la rotation, mais à 60 images par seconde les
+        // réécrire à chaque image ne sert qu'à occuper le navigateur.
+        if (now - lastSpinSync > 120) { lastSpinSync = now; syncRotationUI(); }
+        return true;
+      }
+
+      let lastSweep = 0;
+
+      // Feuilleter w a la main montre bien une tranche a la fois, mais c'est en
+      // les enchainant qu'on percoit la continuite de la forme 4D : une
+      // structure qui apparait, grossit et se resorbe le long de w.
+      function advance4dSweep(now) {
+        if (gridDim !== 4 || !view4d.sweep || view4d.mode !== 'slice') return false;
+        if (now - lastSweep < 380) return false;
+        lastSweep = now;
+        const span = currentSpan();
+        view4d.slice = (view4d.slice + 1) % Math.max(1, span);
+        wSlice.value = view4d.slice;
+        wSliceValue.textContent = `${view4d.slice} / ${Math.max(0, span - 1)}`;
+        applyBoardContour();
+        return true;
+      }
+
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
+        const now = performance.now();
+        // Les deux doivent tourner : advance4dSpin tient aussi l'horloge des images.
+        const spun = advance4dSpin(now);
+        const swept = advance4dSweep(now);
+        if (spun || swept) dirty = true;
         if (volumeMesh) {
           // Le raymarching part de la caméra exprimée dans l'espace du cube.
           volumeMesh.updateMatrixWorld();
@@ -1525,11 +1941,20 @@
       const boardHint = $('#boardHint');
 
       const SIZE_LABELS = { cube: 'Côté', sphere: 'Rayon', torus: 'Grand rayon' };
+      const SUPPORTED_DIMS = [3, 4];
       let currentShape = 'cube';
+      // Dimension choisie dans le formulaire, qui ne devient la dimension réelle
+      // qu'à l'application du plateau — comme la taille de grille.
+      let currentDim = 3;
+      // Dernier plateau renvoyé par le serveur. Il porte la dimension et la
+      // taille réelles, dont dépendent la route du flux et le tracé du contour.
+      let lastBoard = null;
 
       const paintGrid = bindRange(gridSizeInput, (value) => {
-        const cells = value ** 3;
-        $('#gridSizeValue').textContent = `${value}³ · ${numberFormat.format(cells)} cases`;
+        const cells = value ** currentDim;
+        const exponent = currentDim === 4 ? '⁴' : '³';
+        $('#gridSizeValue').textContent =
+          `${value}${exponent} · ${numberFormat.format(cells)} cases`;
       });
 
       function showHint(hint) {
@@ -1582,10 +2007,226 @@
           minor: boardMinor.value || 1,
           density: densityInput.value,
           grid: gridSizeInput.value,
+          dim: currentDim,
         }).then((board) => {
           showHint(board.hint);
           return afterReseed();
         }).catch(fail);
+      });
+
+      // --- quatrième dimension -------------------------------------------
+      const section4d = $('#section4d');
+      const boardDim = $('#boardDim');
+      const dimNote = $('#dimNote');
+      const view4dSelect = $('#view4d');
+      const view4dNote = $('#view4dNote');
+      const sliceField = $('#sliceField');
+      const projectFields = $('#projectFields');
+      const wSlice = $('#wSlice');
+      const wSliceValue = $('#wSliceValue');
+      const legend4d = $('#legend4d');
+      const drawnTile = $('#drawnTile');
+      const statDrawn = $('#statDrawn');
+
+      const DEG = 180 / Math.PI;
+      // Vrai des que l'utilisateur a choisi une tranche lui-meme.
+      let sliceChosen = false;
+
+      // La rampe sert deux fois : au GPU pour colorer, et ici pour dire ce que
+      // la couleur signifie. Les valeurs sont HDR (au-delà de 1, pour le halo) ;
+      // il faut donc les borner avant de les donner à l'écran.
+      function gradientFrom(sample, steps = 24) {
+        const color = new THREE.Color();
+        const byte = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+        const parts = [];
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          sample(t, color);
+          parts.push(`rgb(${byte(color.r)},${byte(color.g)},${byte(color.b)}) ${Math.round(t * 100)}%`);
+        }
+        return `linear-gradient(90deg, ${parts.join(', ')})`;
+      }
+
+      function currentSpan() {
+        return lastBoard?.grid ?? Number(gridSizeInput.value) ?? 20;
+      }
+
+      // Sans échelle, un nuage coloré ne dit rien. Chaque représentation annonce
+      // ce que porte sa couleur, parce que ce n'est pas la même grandeur d'une
+      // vue à l'autre : une position signée, une magnitude, ou un âge.
+      function renderLegend4d() {
+        if (gridDim !== 4) { legend4d.innerHTML = ''; return; }
+        const span = currentSpan();
+        if (view4d.mode === 'project') {
+          legend4d.innerHTML =
+            `<div class="legend-title">Couleur : position dans la 4ᵉ dimension</div>
+             <div class="legend-ramp" style="background:${gradientFrom((t, c) => sampleStops(W_STOPS, t, c))}"></div>
+             <div class="legend-scale"><span>w bas</span><span>notre espace</span><span>w haut</span></div>`;
+        } else if (view4d.mode === 'thickness') {
+          legend4d.innerHTML =
+            `<div class="legend-title">Couleur : cellules empilées le long de w</div>
+             <div class="legend-ramp" style="background:${gradientFrom((t, c) => sampleStops(THICKNESS_STOPS, t, c))}"></div>
+             <div class="legend-scale"><span>1</span><span>${span}</span></div>`;
+        } else {
+          legend4d.innerHTML =
+            `<div class="legend-title">Couleur : âge de la cellule</div>
+             <div class="legend-ramp" style="background:${gradientFrom((t, c) => ageColor(t * 16, c))}"></div>
+             <div class="legend-scale"><span>naissance</span><span>16 générations</span></div>`;
+        }
+      }
+
+      function view4dNoteText() {
+        if (view4d.mode === 'project') {
+          return 'Les quatre axes sont ramenés à trois comme un tesseract sur une feuille : '
+               + 'on tourne dans les plans qui contiennent w, puis on divise par la distance en w. '
+               + 'Proche en w = gros, loin = petit. Tout est montré, mais les cellules se superposent.';
+        }
+        if (view4d.mode === 'slice') {
+          return 'Une seule valeur de w, rendue comme une grille 3D ordinaire. Vue exacte, sans '
+               + `superposition — mais elle ne montre qu'un feuillet sur ${currentSpan()}.`;
+        }
+        return 'Chaque voxel compte les cellules empilées le long de w. Tout l’hypervolume '
+             + 'd’un coup, au prix de l’endroit où elles se trouvent en w.';
+      }
+
+      function syncRotationUI() {
+        const put = (id, radians) => {
+          const degrees = Math.round(radians * DEG) % 360;
+          $(id).value = degrees;
+          $(`${id}Value`).textContent = `${degrees}°`;
+        };
+        put('#rotXW', view4d.rotXW);
+        put('#rotYW', view4d.rotYW);
+        put('#rotZW', view4d.rotZW);
+      }
+
+      function syncDrawnTile() {
+        // En 3D, cubes affichés et population se confondent : la tuile ne dirait
+        // rien. En 4D une tranche n'en montre qu'une fraction et la projection
+        // peut écrêter : c'est l'écart qui porte l'information.
+        drawnTile.hidden = gridDim !== 4;
+        if (gridDim !== 4) return;
+        // En épaisseur on ne dessine pas des cubes mais un volume : ce qu'on
+        // compte alors, ce sont les voxels que la 4ᵉ dimension remplit.
+        drawnTile.querySelector('.tile-label').textContent =
+          view4d.mode === 'thickness' ? 'Voxels occupés' : 'Cubes affichés';
+        statDrawn.textContent = numberFormat.format(drawnCells);
+      }
+
+      function syncDimUI(board) {
+        for (const button of boardDim.querySelectorAll('button')) {
+          button.setAttribute('aria-checked', String(Number(button.dataset.dim) === currentDim));
+        }
+        const ceiling = board?.grid_max_by_dim?.[currentDim] ?? (currentDim === 4 ? 48 : 160);
+        gridSizeInput.max = ceiling;
+        if (Number(gridSizeInput.value) > ceiling) gridSizeInput.value = ceiling;
+        paintGrid();
+        dimNote.hidden = currentDim !== 4;
+        if (currentDim === 4) {
+          dimNote.textContent =
+            `La 4ᵉ dimension s'achète en résolution : côté plafonné à ${ceiling} `
+            + `(${numberFormat.format(ceiling ** 4)} cases), contre 160 en 3D.`;
+        }
+      }
+
+      function sync4dUI() {
+        section4d.hidden = gridDim !== 4;
+        syncDrawnTile();
+        if (gridDim !== 4) return;
+
+        const span = currentSpan();
+        wSlice.max = Math.max(0, span - 1);
+        // Tant que personne n'a bouge le curseur, la tranche se cale au centre
+        // de w. Le bord de la grille est hors plateau, donc toujours vide : y
+        // demarrer donnait une vue qui paraissait ne rien afficher.
+        if (!sliceChosen || view4d.slice === null || view4d.slice > span - 1) {
+          view4d.slice = Math.floor((span - 1) / 2);
+        }
+        wSlice.value = view4d.slice;
+        wSliceValue.textContent = `${view4d.slice} / ${Math.max(0, span - 1)}`;
+
+        view4dSelect.value = view4d.mode;
+        sliceField.hidden = view4d.mode !== 'slice';
+        projectFields.hidden = view4d.mode !== 'project';
+        view4dNote.textContent = view4dNoteText();
+        syncRotationUI();
+        renderLegend4d();
+      }
+
+      boardDim.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-dim]');
+        if (!button) return;
+        const dim = Number(button.dataset.dim);
+        if (dim === currentDim) return;
+        currentDim = dim;
+        syncDimUI(lastBoard);
+        // Le plateau se recale sur la grille qu'on s'apprête à appliquer :
+        // sinon passer en 4D garderait un rayon calculé pour une grille 160.
+        const defaults = shapeDefaults(currentShape);
+        boardSize.value = defaults.size;
+        if (defaults.minor !== null) boardMinor.value = defaults.minor;
+        syncShapeUI();
+      });
+
+      view4dSelect.addEventListener('change', () => {
+        view4d.mode = view4dSelect.value;
+        sync4dUI();
+        // La représentation commande le rendu ET la route du flux : la charge
+        // en cours n'est plus la bonne, il faut redemander l'état.
+        applyRenderMode();
+        applyBoardContour();
+        refreshState().catch(fail);
+      });
+
+      // bindRange peint une fois a l'enregistrement, en lisant le value="0" du
+      // HTML : sans ce drapeau, ce premier passage compterait comme un choix de
+      // l'utilisateur et ecraserait le centrage automatique.
+      wSlice.addEventListener('pointerdown', () => { sliceChosen = true; });
+      wSlice.addEventListener('keydown', () => { sliceChosen = true; });
+
+      bindRange(wSlice, (value) => {
+        view4d.slice = Math.round(value);
+        wSliceValue.textContent = `${view4d.slice} / ${Math.max(0, currentSpan() - 1)}`;
+        applyBoardContour();
+        dirty = true;
+      });
+
+      $('#optSliceSweep').addEventListener('change', (event) => {
+        view4d.sweep = event.target.checked;
+      });
+
+      function stopSpin() {
+        if (!view4d.spin) return;
+        view4d.spin = false;
+        $('#optSpin4d').checked = false;
+      }
+
+      // Prendre la main sur un axe arrête la rotation continue, sinon le curseur
+      // repartirait sous les doigts. Mais cela doit venir d'un geste : bindRange
+      // peint une fois à l'enregistrement, et couper la rotation depuis son
+      // rappel l'arrêtait avant que l'utilisateur ait touché quoi que ce soit.
+      const bindRotation = (id, key) => {
+        const input = $(id);
+        input.addEventListener('pointerdown', stopSpin);
+        input.addEventListener('keydown', stopSpin);
+        return bindRange(input, (value) => {
+          view4d[key] = value / DEG;
+          $(`${id}Value`).textContent = `${Math.round(value)}°`;
+          dirty = true;
+        });
+      };
+      bindRotation('#rotXW', 'rotXW');
+      bindRotation('#rotYW', 'rotYW');
+      bindRotation('#rotZW', 'rotZW');
+
+      bindRange($('#depth4d'), (value) => {
+        view4d.depth = value;
+        $('#depth4dValue').textContent = value.toFixed(2);
+        dirty = true;
+      });
+
+      $('#optSpin4d').addEventListener('change', (event) => {
+        view4d.spin = event.target.checked;
       });
 
       // --- règle ---------------------------------------------------------
@@ -1629,8 +2270,19 @@
       // --- affichage -----------------------------------------------------
       const volumeDensityField = $('#volumeDensityField');
 
+      const renderModeSelect = $('#renderMode');
+      const renderModeField = renderModeSelect.closest('.field');
+
       function syncRenderModeUI() {
         volumeDensityField.hidden = effectiveMode() !== 'volume';
+        // En 4D c'est la representation qui impose le rendu (projection et
+        // tranche sont des cubes, l'epaisseur est le seul volume possible) :
+        // laisser le selecteur actif ferait croire qu'il agit encore.
+        const forced = gridDim === 4;
+        renderModeSelect.disabled = forced;
+        renderModeField.title = forced
+          ? 'En 4D, le rendu decoule de la representation choisie.'
+          : '';
       }
 
       $('#renderMode').addEventListener('change', (event) => {
@@ -1733,16 +2385,31 @@
       // ------------------------------------------------------------------
       // Synchronisation
       // ------------------------------------------------------------------
+      // La route dépend de ce qu'on veut afficher. En 4D, l'épaisseur est déjà
+      // aplatie par le serveur (seul moyen de tenir dans une texture 3D) ;
+      // projection et tranche ont besoin de l'hypervolume entier.
+      function stateRoute(volumetric) {
+        if (gridDim === 4 && volumetric) return '/state/vol?w=-1';
+        return volumetric ? '/state/vol' : '/state/bin';
+      }
+
       async function refreshState(retry = true) {
         const volumetric = effectiveMode() === 'volume';
-        const response = await fetch(volumetric ? '/state/vol' : '/state/bin');
+        const response = await fetch(stateRoute(volumetric));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const buffer = await response.arrayBuffer();
         const decoded = decodeState(buffer);
 
-        if (!gridShape || gridShape.join() !== decoded.shape.join()) {
-          buildWorld(decoded.shape);
-          chipGrid.textContent = decoded.shape.join(' × ');
+        // En épaisseur, le serveur annonce un volume 3D alors que la grille est
+        // 4D : c'est voulu, mais le monde doit rester bâti sur la vraie grille,
+        // que seul le plateau connaît.
+        const worldShape = (gridDim === 4 && volumetric && lastBoard)
+          ? new Array(lastBoard.dim).fill(lastBoard.grid)
+          : decoded.shape;
+
+        if (!gridShape || gridShape.join() !== worldShape.join()) {
+          buildWorld(worldShape);
+          chipGrid.textContent = worldShape.join(' × ');
         }
         applyRenderMode();
 
@@ -1752,22 +2419,32 @@
 
         if (volumetric) {
           // Recopie directe vers le GPU : aucun décodage côté client.
-          volumeTexture.image.data.set(new Uint8Array(buffer, STATE_HEADER_BYTES, decoded.payloadBytes));
+          const payload = new Uint8Array(buffer, STATE_HEADER_BYTES, decoded.payloadBytes);
+          volumeTexture.image.data.set(payload);
           volumeTexture.needsUpdate = true;
           population = decoded.liveCount;
           lastChurn = decoded.churn;
           clipped = false;
+          // L'occupation se mesure sur le volume reçu plutôt que de se déduire
+          // de la population : en épaisseur, les deux ne parlent pas du même
+          // espace (4D contre 3D) et le rapport serait faux.
+          let filled = 0;
+          for (let k = 0; k < payload.length; k++) if (payload[k] !== 0) filled++;
+          volumeOccupancy = filled / Math.max(1, payload.length);
+          drawnCells = filled;
           volumeMesh.material.uniforms.uAlpha.value = autoSampleAlpha();
         } else {
           ingest(attachBinViews(decoded));
+          volumeOccupancy = 0;
         }
 
-        const volume = decoded.shape[0] * decoded.shape[1] * decoded.shape[2];
+        const cells = worldShape.reduce((a, b) => a * b, 1);
         hudGen.textContent = numberFormat.format(decoded.generation);
         hudPop.textContent = numberFormat.format(population);
-        statFill.textContent = `${((population / volume) * 100).toFixed(1)} %`;
+        statFill.textContent = `${((population / cells) * 100).toFixed(1)} %`;
         statChurn.textContent = numberFormat.format(lastChurn);
         sparkCurrent.textContent = numberFormat.format(population);
+        syncDrawnTile();
         if (clipped) setStatus(`Affichage écrêté à ${numberFormat.format(capacity)} cubes`, 'idle');
 
         history.push(population);
@@ -1782,8 +2459,8 @@
       // transiter à chaque étape dans le flux chaud.
       async function refreshMeta() {
         const meta = await api('/meta');
-        if (meta.ndim !== 3) {
-          setStatus('Le serveur doit être configuré en 3D', 'error');
+        if (!SUPPORTED_DIMS.includes(meta.ndim)) {
+          setStatus(`Le serveur est en ${meta.ndim}D : seules 3D et 4D sont rendues`, 'error');
           return;
         }
         chipRule.textContent = meta.rule ?? '—';
@@ -1794,10 +2471,15 @@
         history.length = 0;
         liveCells.clear();
         ghosts.length = 0;
+        // Le plateau porte la dimension, et la dimension décide de la route du
+        // flux : il faut donc le lire avant d'aller chercher l'état.
+        await loadBoard();
         await refreshState();
         // Le contour doit refléter le plateau réellement appliqué par le serveur,
-        // pas ce que contiennent les champs du formulaire.
-        await Promise.all([refreshMeta(), loadRules(), loadBoard()]);
+        // pas ce que contiennent les champs du formulaire. Il se retrace ici,
+        // une fois que le monde existe.
+        applyBoardContour();
+        await Promise.all([refreshMeta(), loadRules()]);
       }
 
       async function loadRules() {
@@ -1820,7 +2502,10 @@
 
       async function loadBoard() {
         const board = await api('/board');
+        lastBoard = board;
         currentShape = board.shape;
+        currentDim = board.dim ?? 3;
+        gridDim = currentDim;
         boardSize.value = board.size;
         boardMinor.value = board.minor;
         densityInput.value = board.density;
@@ -1830,8 +2515,16 @@
         paintDensity();
         paintGrid();
         syncShapeUI();
+        syncDimUI(board);
+        sync4dUI();
         showHint(board.hint);
         buildBoard(board);
+      }
+
+      // Le contour se retrace aussi quand rien du plateau n'a bougé : changer
+      // de tranche change la section, donc le contour.
+      function applyBoardContour() {
+        if (lastBoard) buildBoard(lastBoard);
       }
 
       async function loadNoise() {
@@ -1842,8 +2535,12 @@
       }
 
       try {
+        // Le plateau porte la dimension, dont depend la route du flux : il se
+        // lit avant l'etat, sinon le premier echange part sur la mauvaise route.
+        await loadBoard();
         await refreshState();
-        await Promise.all([refreshMeta(), loadRules(), loadBoard(), loadNoise()]);
+        applyBoardContour();
+        await Promise.all([refreshMeta(), loadRules(), loadNoise()]);
         setStatus('En pause', 'idle');
         resize();
         animate();
